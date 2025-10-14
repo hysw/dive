@@ -17,6 +17,7 @@
 #include <QDialog>
 #include <future>
 #include <optional>
+#include "async_worker.h"
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
@@ -181,8 +182,9 @@ private:
     const int             kDataRole = Qt::UserRole + 1;
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";
+    AsyncWorker<>         m_worker;
     std::filesystem::path m_local_capture_file_directory = "";
-    std::future<void>     m_replay_active;
+    bool                  m_replay_active = false;
     Overlay              *m_overlay;
 
     struct StatusUpdateQueueItem

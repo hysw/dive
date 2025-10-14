@@ -677,14 +677,14 @@ absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnReplay()
 {
-    if (m_replay_active.valid())
+    if (m_replay_active)
     {
         return;
     }
 
     OverlayMessage("Replaying...");
 
-    m_replay_active = std::async([=]() {
+    m_worker.Run([=]() {
         ReplayImpl();
         UpdateReplayStatus(ReplayStatusUpdateCode::kReplayStatusDone);
     });
@@ -714,10 +714,7 @@ void AnalyzeDialog::ExecuteStatusUpdate()
         switch (item.status)
         {
         case ReplayStatusUpdateCode::kReplayStatusDone:
-            if (m_replay_active.valid())
-            {
-                m_replay_active.get();
-            }
+            m_replay_active = false;
             DisableOverlay();
             break;
         case ReplayStatusUpdateCode::kReplayStatusSuccess:
