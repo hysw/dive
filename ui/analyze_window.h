@@ -15,6 +15,8 @@
 */
 
 #include <QDialog>
+#include <future>
+#include <optional>
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
@@ -32,6 +34,7 @@ class QLineEdit;
 class QListWidget;
 class QSpinBox;
 class QTextEdit;
+class Overlay;
 class MainWindow;
 class QCheckBox;
 
@@ -53,6 +56,18 @@ class AnalyzeDialog : public QDialog
     };
 
     Q_OBJECT
+    enum ReplayStatusUpdateCode : int
+    {
+        kReplayStatusDone,
+        kReplayStatusSuccess,
+        kReplayStatusFailure,
+        kReplayStatusSetup,
+        kReplayStatusSetupDeviceFailure,
+        kReplayStatusStartNormalReplay,
+        kReplayStatusStartPm4Replay,
+        kReplayStatusStartGpuTimeReplay,
+        kReplayStatusStartPerfCounterReplay,
+    };
 
 public:
     AnalyzeDialog(
@@ -62,17 +77,25 @@ public:
     void UpdateDeviceList(bool isInitialized);
     void SetSelectedCaptureFile(const QString &filePath);
 private slots:
+    void OnReplayStatusUpdate(int status_code, const QString &error_message);
     void OnDeviceSelected(const QString &);
     void OnDeviceListRefresh();
     void OnOpenFile();
     void OnReplay();
+    void OnOverlayMessage(const QString &message);
+    void OnDisableOverlay();
+
 signals:
+    void ReplayStatusUpdated(int status_code, const QString &error_message);
     void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(
-    const std::filesystem::path                                        &file_path,
-    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
+    void OnDisplayPerfCounterResults(const QString &file_path);
     void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
+    void OverlayMessage(const QString &message);
+    void DisableOverlay();
+
+protected:
+    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
 private:
     void                        ShowErrorMessage(const std::string &message);
@@ -95,6 +118,11 @@ private:
                                               const std::string   &remote_gfxr_file);
     absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
                                                 const std::string   &remote_gfxr_file);
+
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &error_messge = "");
+    void ExecuteStatusUpdate();
+
+    void ReplayImpl();
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -154,4 +182,13 @@ private:
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";
     std::filesystem::path m_local_capture_file_directory = "";
+    std::future<void>     m_replay_active;
+    Overlay              *m_overlay;
+
+    struct StatusUpdateQueueItem
+    {
+        ReplayStatusUpdateCode status;
+        QString                error_message;
+    };
+    std::vector<StatusUpdateQueueItem> m_status_update_queue;
 };
