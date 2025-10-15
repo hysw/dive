@@ -107,8 +107,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow();
     ~MainWindow();
-    bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
+    void LoadFile(const std::string& filename);
 
 protected:
     virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
@@ -180,6 +180,11 @@ private:
         kGfxrFile,
     };
 
+    struct LoadFileRequest
+    {
+        std::string file_name;
+        bool        is_temp_file = false;
+    };
     struct LoadFileResult
     {
         LoadedFileType file_type;
@@ -193,6 +198,10 @@ private:
         kPm4DrawCall
     };
 
+    // Start an async file loading operation:
+    void RequestLoadFile(const LoadFileRequest& request);
+
+    // Implement async file loading operation:
     LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
 
     void OnDiveFileLoaded();
@@ -360,6 +369,8 @@ private:
     Dive::TraceStats                           *m_trace_stats;
     Dive::CaptureStats                         *m_capture_stats;
 
-    std::future<LoadFileResult>        m_loading_result;
+    std::future<LoadFileResult> m_loading_result;
+    // In case a load is in progress, request a load for later.
+    std::optional<LoadFileRequest>     m_pending_request;
     std::vector<std::function<void()>> m_loading_pending_task;
 };

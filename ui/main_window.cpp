@@ -582,7 +582,7 @@ void MainWindow::OnTraceAvailable(const QString &path)
 {
     qDebug() << "Trace is at " << path;
     // Figure out what do we do if we get repeated trigger of LoadFile before async call is done.
-    LoadFile(path.toStdString().c_str(), /*is_temp_file*/ true, /*async*/ false);
+    RequestLoadFile({ path.toStdString().c_str(), /*is_temp_file*/ true });
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1065,18 +1065,25 @@ void MainWindow::OnUnsupportedFile(const std::string &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool async)
+void MainWindow::LoadFile(const std::string& filename) {
+    RequestLoadFile(LoadFileRequest{filename});
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::RequestLoadFile(const LoadFileRequest &request)
 {
     if (m_loading_result.valid())
     {
         // We are still loading something else.
-        return false;
+        // Discard all previous pending request and add the new request.
+        m_pending_request = request;
+        return;
     }
 
     // We don't want other UI interaction as they cause race conditions.
     setDisabled(true);
 
-    m_progress_tracker.sendMessage("Loading " + file_name);
+    m_progress_tracker.sendMessage("Loading " + request.file_name);
 
     m_log_record.Reset();
 
@@ -1091,45 +1098,23 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
     // Discard associated timing results.
     m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
     m_gpu_timing_model->OnGpuTimingResultsGenerated("");
-    if (async)
-    {
-        // Start async file loading, at the end of loading FileLoaded will be triggered.
-        m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
-            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-            auto file_type = LoadFileImpl(file_name, is_temp_file);
-            [[maybe_unused]] int64_t
-            time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
-
-            DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-            // Now that the file is loaded, we can send a signal to UI thread.
-            FileLoaded();
-            return LoadFileResult{ file_type, file_name, is_temp_file };
-        });
-    }
-    else
-    {
-        // This code path is for UI element that can't handle async operations.
-        // e.g. AnalyzeWindow
+    // Start async file loading, at the end of loading FileLoaded will be triggered.
+    m_loading_result = std::async([this, request = request]() {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        auto file_type = LoadFileImpl(file_name, is_temp_file);
+        auto file_type = LoadFileImpl(request.file_name, request.is_temp_file);
         [[maybe_unused]] int64_t
         time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now() - begin)
                                .count();
+
         DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
                        (time_used_to_load_ms / 1000.0));
-
-        std::promise<LoadFileResult> p;
-        p.set_value(LoadFileResult{ file_type, file_name, is_temp_file });
-        m_loading_result = p.get_future();
+        // Now that the file is loaded, we can send a signal to UI thread.
         FileLoaded();
-    }
-    return true;
+        return LoadFileResult{ file_type, request.file_name, request.is_temp_file };
+    });
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1364,6 +1349,14 @@ void MainWindow::OnFileLoaded()
         task();
     }
 
+    if (m_pending_request)
+    {
+        auto pending_request = m_pending_request.value();
+        m_pending_request = std::nullopt;
+        // Load the last pending request.
+        RequestLoadFile(pending_request);
+    }
+
     // Re-enable UI interaction now we are done async loading.
     setDisabled(false);
     HideOverlay();
@@ -1422,12 +1415,7 @@ void MainWindow::OnOpenFile()
     {
         QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
         Settings::Get()->WriteLastFilePath(last_file_path);
-        if (!LoadFile(file_name.toStdString().c_str()))
-        {
-            QMessageBox::critical(this,
-                                  QString("Error opening file"),
-                                  (QString("Unable to open file: ") + file_name));
-        }
+        RequestLoadFile({ file_name.toStdString().c_str() });
     }
 }
 
@@ -1607,7 +1595,7 @@ void MainWindow::OpenRecentFile()
     QAction *action = qobject_cast<QAction *>(sender());
     if (action)
     {
-        LoadFile(action->data().toString().toStdString().c_str());
+        RequestLoadFile({ action->data().toString().toStdString().c_str() });
     }
 }
 
@@ -3016,10 +3004,7 @@ void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
 {
     const std::string file_path_std_str = file_path.toStdString();
     const char       *file_path_str = file_path_std_str.c_str();
-    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
-    {
-        return;
-    }
+    RequestLoadFile({ file_path_str, /*is_temp_file*/ false });
 }
 
 //--------------------------------------------------------------------------------------------------
