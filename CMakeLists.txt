@@ -81,6 +81,7 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
+add_subdirectory(dive_platform)
 add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)

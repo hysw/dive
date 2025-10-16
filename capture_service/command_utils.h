@@ -16,26 +16,14 @@ limitations under the License.
 
 #pragma once
 
-#include <filesystem>
 #include <string>
 #include <thread>
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 
+#include "dive_host_platform.h"
 namespace Dive
 {
-// Logs the command and the result of a command line application.
-// Returns the output of the command if it finished successfully, or error status otherwise
-absl::StatusOr<std::string> LogCommand(const std::string &command,
-                                       const std::string &output,
-                                       int                ret);
-
-// Runs a command line application.
-// Returns the output of the command if it finished successfully, or error status otherwise
-absl::StatusOr<std::string> RunCommand(const std::string &command);
-
-// Returns the directory of the currently running executable.
-absl::StatusOr<std::filesystem::path> GetExecutableDirectory();
 
 class AdbSession
 {

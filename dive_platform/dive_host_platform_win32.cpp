@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "command_utils.h"
+#include "dive_host_platform.h"
 
 #include <vector>
 #include "absl/status/status.h"
