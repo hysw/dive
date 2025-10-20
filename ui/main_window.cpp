@@ -1426,9 +1426,12 @@ void MainWindow::OnFileLoaded()
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);
-    for (auto &task : tasks)
+    if (result.file_type != LoadedFileType::kUnknown)
     {
-        task();
+        for (auto &task : tasks)
+        {
+            task();
+        }
     }
 
     // Re-enable UI interaction now we are done async loading.
@@ -1476,10 +1479,19 @@ void MainWindow::OnFileLoaded()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnOpenFile()
+void MainWindow::OnOpenFileWithFilter(OpenFileFilterType filter_type)
 {
     QString supported_files = QStringLiteral(
-    "Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
+    "Supported files (*.rd *.gfxr);;Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
+
+    switch (filter_type)
+    {
+    case OpenFileFilterType::kAllSupported:
+        break;
+    case OpenFileFilterType::kGfxrOnly:
+        supported_files = QStringLiteral("GFXR files (*.gfxr);;All files (*.*)");
+        break;
+    }
     QString file_name = QFileDialog::getOpenFileName(this,
                                                      "Open Document",
                                                      Settings::Get()->ReadLastFilePath(),
@@ -1496,6 +1508,10 @@ void MainWindow::OnOpenFile()
                                   (QString("Unable to open file: ") + file_name));
         }
     }
+}
+void MainWindow::OnOpenFile()
+{
+    OnOpenFileWithFilter(OpenFileFilterType::kAllSupported);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1516,16 +1532,24 @@ void MainWindow::OnNormalCapture()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
+    auto open_dialog = [=]() {
+        // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A
+        // .gfxr file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
+        bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
+        if (gfxr_capture_loaded)
+        {
+            OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
+        }
+    };
+
     if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
-        OnOpenFile();
+        OnOpenFileWithFilter(OpenFileFilterType::kGfxrOnly);
+        m_loading_pending_task.push_back(open_dialog);
     }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
-    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
-    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
-    if (gfxr_capture_loaded)
+    else
     {
-        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
+        open_dialog();
     }
 }
 

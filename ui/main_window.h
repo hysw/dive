@@ -107,6 +107,13 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
+    enum class OpenFileFilterType
+    {
+        kAllSupported,
+        kGfxrOnly,
+    };
+    Q_ENUM(OpenFileFilterType);
+
     MainWindow();
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
@@ -149,6 +156,7 @@ private slots:
     void OnFilterModeChange(const QString &string);
     void OnGfxrFilterModeChange();
     void OnOpenFile();
+    void OnOpenFileWithFilter(OpenFileFilterType filter_type);
     void OnGFXRCapture();
     void OnNormalCapture();
     void OnCaptureTrigger();
