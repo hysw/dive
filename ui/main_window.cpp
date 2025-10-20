@@ -39,6 +39,7 @@
 #include <optional>
 #include <qabstractitemmodel.h>
 #include <qvariant.h>
+#include <utility>
 
 #include "about_window.h"
 #include "buffer_view.h"
@@ -48,8 +49,10 @@
 #include "command_model.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/common/common.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
+#include "event_utils.h"
 #include "object_names.h"
 #include "settings.h"
 #include "trace_window.h"
@@ -139,7 +142,6 @@ std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
     }
     return std::nullopt;
 }
-
 }  // namespace
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
@@ -600,8 +602,8 @@ bool MainWindow::InitializePlugins()
 void MainWindow::OnTraceAvailable(const QString &path)
 {
     qDebug() << "Trace is at " << path;
-    // Figure out what do we do if we get repeated trigger of LoadFile before async call is done.
-    LoadFile(path.toStdString().c_str(), /*is_temp_file*/ true, /*async*/ false);
+    OnPendingLoadFile(/*file_name*/ path,
+                      /*is_temp_file*/ true);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1087,18 +1089,14 @@ void MainWindow::OnUnsupportedFile(const std::string &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool async)
+void MainWindow::OnLoadFile(const LoadFileRequest &request)
 {
-    if (m_loading_result.valid())
-    {
-        // We are still loading something else.
-        return false;
-    }
+    DIVE_ASSERT(!m_loading_result.valid());
 
     // We don't want other UI interaction as they cause race conditions.
     setDisabled(true);
 
-    m_progress_tracker.sendMessage("Loading " + file_name);
+    m_progress_tracker.sendMessage("Loading " + request.file_name);
 
     m_log_record.Reset();
 
@@ -1113,117 +1111,61 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
     // Discard associated timing results.
     m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
     m_gpu_timing_model->OnGpuTimingResultsGenerated("");
-    if (async)
-    {
-        // Start async file loading, at the end of loading FileLoaded will be triggered.
-        m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
-            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-            auto file_type = LoadFileImpl(file_name, is_temp_file);
-            [[maybe_unused]] int64_t
-            time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
-
-            DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-            // Now that the file is loaded, we can send a signal to UI thread.
-            FileLoaded();
-            return LoadFileResult{ file_type, file_name, is_temp_file };
-        });
-    }
-    else
-    {
-        // This code path is for UI element that can't handle async operations.
-        // e.g. AnalyzeWindow
+    // Start async file loading, at the end of loading FileLoaded will be triggered.
+    m_loading_result = std::async([this, request = request]() {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        auto file_type = LoadFileImpl(file_name, is_temp_file);
+        auto file_type = LoadFileImpl(request);
         [[maybe_unused]] int64_t
         time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now() - begin)
                                .count();
+
         DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
                        (time_used_to_load_ms / 1000.0));
-
-        std::promise<LoadFileResult> p;
-        p.set_value(LoadFileResult{ file_type, file_name, is_temp_file });
-        m_loading_result = p.get_future();
+        // Now that the file is loaded, we can send a signal to UI thread.
         FileLoaded();
-    }
-    return true;
+        return LoadFileResult{ file_type, request.file_name, request.is_temp_file };
+    });
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::LoadFile(const std::string &file_name)
+{
+    OnPendingLoadFile(QString::fromStdString(file_name), false);
+};
+
+void MainWindow::OnPendingLoadFile(const QString &file_name, bool is_temp_file)
+{
+    m_loading_tasks = {};
+    m_loading_tasks.load_file_request = LoadFileRequest{ file_name.toStdString(), is_temp_file };
+    ExecuteLoadingTask();
+}
+
 void MainWindow::OnPendingPerfCounterResults(const QString &file_name)
 {
-    if (!(m_perf_counter_model && m_available_metrics))
-    {
-        return;
-    }
-
-    auto file_path = std::filesystem::path(file_name.toStdString());
-    auto task = [=]() {
-        m_perf_counter_model->OnPerfCounterResultsGenerated(file_path, *m_available_metrics);
-        if (!file_path.empty())
-        {
-            qDebug() << "Loaded: " << file_path.string().c_str();
-        }
-    };
-    if (m_loading_result.valid())
-    {
-        m_loading_pending_task.push_back(task);
-        return;
-    }
-    task();
+    m_loading_tasks.perf_counter_file_name = std::filesystem::path(file_name.toStdString());
+    ExecuteLoadingTask();
 }
 
 void MainWindow::OnPendingGpuTimingResults(const QString &file_name)
 {
-    if (!m_gpu_timing_model)
-    {
-        return;
-    }
-    auto task = [=]() {
-        m_gpu_timing_model->OnGpuTimingResultsGenerated(file_name);
-        if (!file_name.isEmpty())
-        {
-            qDebug() << "Loaded: " << file_name;
-        }
-    };
-    if (m_loading_result.valid())
-    {
-        m_loading_pending_task.push_back(task);
-        return;
-    }
-    task();
+    m_loading_tasks.gpu_time_file_name = std::filesystem::path(file_name.toStdString());
+    ExecuteLoadingTask();
 }
 
 void MainWindow::OnPendingScreenshot(const QString &file_name)
 {
-    if (!m_frame_tab_view)
-    {
-        return;
-    }
-    auto task = [=]() {
-        m_frame_tab_view->OnCaptureScreenshotLoaded(file_name);
-        if (!file_name.isEmpty())
-        {
-            qDebug() << "Loaded: " << file_name;
-        }
-    };
-    if (m_loading_result.valid())
-    {
-        m_loading_pending_task.push_back(task);
-        return;
-    }
-    task();
+    m_loading_tasks.screenshot_file_name = std::filesystem::path(file_name.toStdString());
+    ExecuteLoadingTask();
 }
 
 //--------------------------------------------------------------------------------------------------
-MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
+MainWindow::LoadedFileType MainWindow::LoadFileImpl(const LoadFileRequest &request)
 {
     // Note: this function might not run on UI thread, thus can't do any UI modification.
+    auto file_name = request.file_name;
 
     // Check the file type to determine what is loaded.
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
@@ -1409,19 +1351,107 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::ExecuteLoadingTask()
+{
+    NestingGuard nesting_guard(m_execute_loading_task);
+    if (nesting_guard.AlreadyActive())
+    {
+        return;
+    }
+
+    bool continue_loop = true;
+    auto extract = [&](auto &task) {
+        auto result = std::move(task);
+        task = std::nullopt;
+        continue_loop = continue_loop || result.has_value();
+        return result;
+    };
+
+    while (continue_loop)
+    {
+        continue_loop = false;
+        if (m_loading_result.valid())
+        {
+            // We are still loading the previous request.
+            return;
+        }
+
+        if (auto load_file_request = extract(m_loading_tasks.load_file_request))
+        {
+            OnLoadFile(*load_file_request);
+            return;
+        }
+
+        if (auto perf_counter_file_name = extract(m_loading_tasks.perf_counter_file_name))
+        {
+            if (m_perf_counter_model && m_available_metrics)
+            {
+                auto file_name = *perf_counter_file_name;
+                m_perf_counter_model->OnPerfCounterResultsGenerated(file_name,
+                                                                    *m_available_metrics);
+                if (!file_name.empty())
+                {
+                    qDebug() << "Loaded: " << file_name.string().c_str();
+                }
+            }
+        }
+
+        if (auto gpu_time_file_name = extract(m_loading_tasks.gpu_time_file_name))
+        {
+            if (m_gpu_timing_model)
+            {
+                auto file_name = *gpu_time_file_name;
+                m_gpu_timing_model->OnGpuTimingResultsGenerated(
+                QString::fromStdString(file_name.string()));
+                if (!file_name.empty())
+                {
+                    qDebug() << "Loaded: " << file_name.string().c_str();
+                }
+            }
+        }
+
+        if (auto screenshot_file_name = extract(m_loading_tasks.screenshot_file_name))
+        {
+            auto file_name = *screenshot_file_name;
+            m_frame_tab_view->OnCaptureScreenshotLoaded(QString::fromStdString(file_name.string()));
+            if (!file_name.empty())
+            {
+                qDebug() << "Loaded: " << file_name.string().c_str();
+            }
+        }
+
+        if (auto result = extract(m_loading_tasks.populate_result))
+        {
+            PopulateResult(*result);
+        }
+
+        if (auto task = extract(m_loading_tasks.open_analyze_dialog))
+        {
+            // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A
+            // .gfxr file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are
+            // true.
+            bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
+            if (gfxr_capture_loaded)
+            {
+                OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
+            }
+        }
+    }
+}
+
 void MainWindow::OnFileLoaded()
 {
     DIVE_ASSERT(m_loading_result.valid());
 
     // It should return almost immediately, the signal is sent just before async call return.
-    auto result = m_loading_result.get();
+    m_loading_tasks.populate_result = m_loading_result.get();
 
-    std::vector<std::function<void()>> tasks;
-    std::swap(tasks, m_loading_pending_task);
-    for (auto &task : tasks)
-    {
-        task();
-    }
+    ExecuteLoadingTask();
+}
+
+void MainWindow::PopulateResult(LoadFileResult result)
+{
+    m_capture_file = QString(result.file_name.c_str());
 
     // Re-enable UI interaction now we are done async loading.
     setDisabled(false);
@@ -1481,12 +1511,7 @@ void MainWindow::OnOpenFile()
     {
         QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
         Settings::Get()->WriteLastFilePath(last_file_path);
-        if (!LoadFile(file_name.toStdString().c_str()))
-        {
-            QMessageBox::critical(this,
-                                  QString("Error opening file"),
-                                  (QString("Unable to open file: ") + file_name));
-        }
+        OnPendingLoadFile(file_name, false);
     }
 }
 
@@ -1512,13 +1537,8 @@ void MainWindow::OnAnalyzeCapture()
     {
         OnOpenFile();
     }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
-    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
-    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
-    if (gfxr_capture_loaded)
-    {
-        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
-    }
+    m_loading_tasks.open_analyze_dialog = LoadingTasks::Atom{};
+    ExecuteLoadingTask();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3111,12 +3131,8 @@ void MainWindow::ConnectGfxrFileTabs()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
 {
-    const std::string file_path_std_str = file_path.toStdString();
-    const char       *file_path_str = file_path_std_str.c_str();
-    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
-    {
-        return;
-    }
+    OnPendingLoadFile(/*file_name*/ file_path,
+                      /*is_temp_file*/ false);
 }
 
 //--------------------------------------------------------------------------------------------------

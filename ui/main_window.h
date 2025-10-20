@@ -17,6 +17,7 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include <filesystem>
 #include <future>
 #include <functional>
 #include <QMainWindow>
@@ -27,6 +28,7 @@
 #include "dive_core/command_hierarchy.h"
 #include "progress_tracker_callback.h"
 #include "dive_core/log.h"
+#include "event_utils.h"
 
 // Forward declarations
 class BufferView;
@@ -109,7 +111,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow();
     ~MainWindow();
-    bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
+    void LoadFile(const std::string &file_name);
     bool InitializePlugins();
 
 protected:
@@ -138,6 +140,7 @@ public slots:
     void OnCounterSelected(uint64_t);
     void OnGpuTimingDataSelected(uint64_t);
     void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
+    void OnPendingLoadFile(const QString &file_name, bool is_temp_file);
     void OnPendingPerfCounterResults(const QString &file_name);
     void OnPendingGpuTimingResults(const QString &file_name);
     void OnPendingScreenshot(const QString &file_name);
@@ -184,6 +187,12 @@ private:
         kGfxrFile,
     };
 
+    struct LoadFileRequest
+    {
+        std::string file_name;
+        bool        is_temp_file;
+    };
+
     struct LoadFileResult
     {
         LoadedFileType file_type;
@@ -196,9 +205,24 @@ private:
         kGfxrDrawCall,
         kPm4DrawCall
     };
+    struct LoadingTasks
+    {
+        struct Atom
+        {};
 
-    LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
+        std::optional<LoadFileRequest>       load_file_request;
+        std::optional<std::filesystem::path> perf_counter_file_name;
+        std::optional<std::filesystem::path> gpu_time_file_name;
+        std::optional<std::filesystem::path> screenshot_file_name;
+        std::optional<LoadFileResult>        populate_result;
+        std::optional<Atom>                  open_analyze_dialog;
+    };
 
+    void           OnLoadFile(const LoadFileRequest &request);
+    LoadedFileType LoadFileImpl(const LoadFileRequest &request);
+
+    void ExecuteLoadingTask();
+    void PopulateResult(LoadFileResult result);
     void OnDiveFileLoaded();
     void OnAdrenoRdFileLoaded();
     void OnGfxrFileLoaded();
@@ -367,6 +391,8 @@ private:
     Dive::TraceStats                           *m_trace_stats;
     Dive::CaptureStats                         *m_capture_stats;
 
-    std::future<LoadFileResult>        m_loading_result;
-    std::vector<std::function<void()>> m_loading_pending_task;
+    NestingGuard::Flag m_execute_loading_task;
+
+    std::future<LoadFileResult> m_loading_result;
+    LoadingTasks                m_loading_tasks;
 };
