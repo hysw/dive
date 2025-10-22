@@ -983,7 +983,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const Dive::Context      &c
     // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
     LOGD("Profiling binary cmd: %s\n", cmd.c_str());
     // TODO: make adb run take a context so we don't stuck here waiting for it to finish.
-    RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+    RETURN_IF_ERROR(m_device->Adb().Run(context, cmd));
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
     std::filesystem::path parse_remote_path = settings.remote_capture_path;

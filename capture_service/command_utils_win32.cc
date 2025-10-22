@@ -50,7 +50,7 @@ absl::StatusOr<std::string> LogCommand(const std::string &command,
     return output;
 }
 
-absl::StatusOr<std::string> RunCommand(const std::string &command)
+absl::StatusOr<std::string> RunCommand(const Dive::Context &, const std::string &command)
 {
     std::string output;
     std::string err_msg;

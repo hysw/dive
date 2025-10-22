@@ -16,8 +16,11 @@ limitations under the License.
 
 #include "command_utils.h"
 
+#include "fcntl.h"
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -26,6 +29,11 @@ limitations under the License.
 
 namespace Dive
 {
+
+namespace
+{
+unsigned kAsyncReadingDurationMs = 100;
+};
 
 absl::StatusOr<std::string> LogCommand(const std::string &command,
                                        const std::string &output,
@@ -48,7 +56,48 @@ absl::StatusOr<std::string> LogCommand(const std::string &command,
     return output;
 }
 
-absl::StatusOr<std::string> RunCommand(const std::string &command)
+absl::StatusOr<std::string> ReadCommandOutputNonBlocking(const Dive::Context &context,
+                                                         const std::string   &command,
+                                                         int                  fd,
+                                                         char                *buffer,
+                                                         size_t               buffer_size)
+{
+    int flags = fcntl(fd, F_GETFL);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);  // Set non-blocking flag
+
+    std::string output;
+    int         status = 0;
+    while (true)
+    {
+        if (context->Cancelled())
+        {
+            LOGD("> %s\n(cancelled)\n", command.c_str());
+            return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+        }
+        auto bytes_read = read(fd, buffer, buffer_size - 1);
+        if (bytes_read > 0)
+        {
+            output.append(buffer, bytes_read);
+            continue;
+        }
+
+        if (bytes_read == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(kAsyncReadingDurationMs));
+            continue;
+        }
+
+        if (bytes_read != 0)
+        {
+            status = errno;
+        }
+        break;
+    }
+    output = absl::StripAsciiWhitespace(output);
+    return LogCommand(command, output, status);
+}
+
+absl::StatusOr<std::string> RunCommand(const Dive::Context &context, const std::string &command)
 {
     std::string output;
     std::string err_msg;
@@ -62,6 +111,17 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
     }
 
     char buf[128];
+    if (!context.IsNull())
+    {
+        int fd = fileno(pipe);
+        if (fd != -1)
+        {
+            auto result = ReadCommandOutputNonBlocking(context, command, fd, buf, sizeof(buf));
+            pclose(pipe);
+            return result;
+        }
+    }
+
     while (fgets(buf, 128, pipe) != nullptr)
     {
         output += std::string(buf);
