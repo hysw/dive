@@ -2888,7 +2888,7 @@ void VulkanStateTracker::TrackMappedAssetsWrites(format::HandleId memory_id)
 
     for (const auto& entry : memories_page_status)
     {
-        assert(entry.second.status_tracker.HasActiveWriteBlock());
+        // assert(entry.second.status_tracker.HasActiveWriteBlock());
 
         const util::PageStatusTracker& page_status = entry.second.status_tracker;
 

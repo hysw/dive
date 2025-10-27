@@ -31,9 +31,15 @@
 #include <cassert>
 #include <csetjmp>
 #include <cinttypes>
+#include <sstream>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
+
+namespace
+{
+constexpr bool kSamePageReadGuard = false;
+}
 
 #if defined(WIN32)
 #if !defined(WIN32_LEAN_AND_MEAN)
@@ -250,8 +256,7 @@ PageGuardManager::PageGuardManager(bool                 enable_copy_on_map,
                                    bool                 enable_signal_handler_watcher,
                                    int                  signal_handler_watcher_max_restores,
                                    MemoryProtectionMode protection_mode) :
-    exception_handler_(nullptr),
-    exception_handler_count_(0), system_page_size_(util::platform::GetSystemPageSize()),
+    exception_handler_(nullptr), exception_handler_count_(0), system_page_size_(util::platform::GetSystemPageSize()),
     system_page_pot_shift_(GetSystemPagePotShift()), enable_copy_on_map_(enable_copy_on_map),
     enable_separate_read_(enable_separate_read), unblock_sigsegv_(unblock_SIGSEGV),
     enable_signal_handler_watcher_(enable_signal_handler_watcher),
@@ -674,6 +679,37 @@ size_t PageGuardManager::GetMemorySegmentSize(const MemoryInfo* memory_info, siz
 
 void PageGuardManager::MemoryCopy(void* destination, const void* source, size_t size)
 {
+#if 0
+    if (size >= 8)
+    {
+        const auto sp = reinterpret_cast<const uint64_t*>(source);
+        if ((*sp & 0xffffffffu) == 0xdeadbeefu)
+        {
+            std::stringstream sst;
+            auto              count   = size / 8;
+            bool              is_zero = false;
+            sst << "[" << size << "|" << source << "->" << destination << "]" << (*sp >> 32) << ":";
+            for (size_t i = 1; i < count; ++i)
+            {
+                if (sp[i] == 0)
+                {
+                    if (is_zero)
+                    {
+                        continue;
+                    }
+                    is_zero = true;
+                    sst << (i > 1 ? "," : "") << "0...";
+                }
+                else
+                {
+                    is_zero = false;
+                    sst << (i > 1 ? "," : "") << sp[i];
+                }
+            }
+            GFXRECON_LOG_ERROR("DEBUG[tianc]: gfxr-copy %s", sst.str().c_str());
+        }
+    }
+#endif
     util::platform::MemoryCopy(destination, size, source, size);
 }
 
@@ -1419,9 +1455,20 @@ bool PageGuardManager::HandleGuardPageViolation(void* address, bool is_write, bo
 
             if (enable_read_write_same_page_)
             {
-                // The page guard has been removed from this page.  If we expect both reads and writes to the page,
-                // it needs to be marked for active write.
-                memory_info->status_tracker.SetActiveWriteBlock(page_index, true);
+                if (kSamePageReadGuard)
+                {
+
+                    if (!is_write)
+                    {
+                        SetMemoryProtection(page_address, segment_size, kGuardReadOnlyProtect);
+                    }
+                }
+                else
+                {
+                    // The page guard has been removed from this page.  If we expect both reads and writes to the page,
+                    // it needs to be marked for active write.
+                    memory_info->status_tracker.SetActiveWriteBlock(page_index, true);
+                }
             }
         }
     }
