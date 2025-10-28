@@ -48,8 +48,7 @@ class GfxrVulkanCommandModel;
 class GpuTimingModel;
 class GpuTimingTabView;
 class HoverHelp;
-class Overlay;
-class OverlayWidget;
+class OverlayHelper;
 class OverviewTabView;
 class PropertyPanel;
 class QCheckBox;
@@ -113,7 +112,6 @@ public:
     bool InitializePlugins();
 
 protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
 
 signals:
@@ -128,7 +126,7 @@ signals:
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
-    void OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path);
+    void OnAnalyze(const std::string &file_path);
     void OnOpenFileFromAnalyzeDialog(const QString &file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint &pos);
@@ -197,7 +195,13 @@ private:
         kPm4DrawCall
     };
 
-    LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
+    static constexpr bool ContainsGfxrFile(LoadedFileType file_type)
+    {
+        return file_type == LoadedFileType::kDiveFile || file_type == LoadedFileType::kGfxrFile;
+    }
+    static LoadedFileType LoadFileImpl(MainWindow        *state,
+                                       const std::string &file_name,
+                                       bool               is_temp_file = false);
 
     void OnDiveFileLoaded();
     void OnAdrenoRdFileLoaded();
@@ -349,17 +353,16 @@ private:
     QShortcut *m_event_state_tab_shortcut = nullptr;
     QShortcut *m_gfxr_vulkan_command_arguments_tab_shortcut = nullptr;
 
-    std::string m_unsaved_capture_path;
-    bool        m_capture_saved = false;
-    int         m_capture_num = 0;
-    int         m_previous_tab_index = -1;
-    bool        m_gfxr_capture_loaded = false;
-    bool        m_correlated_capture_loaded = false;
+    std::string    m_unsaved_capture_path;
+    bool           m_capture_saved = false;
+    int            m_capture_num = 0;
+    int            m_previous_tab_index = -1;
+    LoadedFileType m_trace_type;
 
     EventSelection *m_event_selection;
 
     // Overlay to be displayed while capture
-    Overlay *m_overlay;
+    OverlayHelper *m_overlay;
 
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;

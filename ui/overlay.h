@@ -13,16 +13,25 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#pragma once
 
 #include <memory>
+#include <functional>
 #include <QWidget>
-#include <QtWidgets>
+#include <qwidget.h>
 
-class QTimer;
 class QElapsedTimer;
+class QLabel;
+class QLayout;
+class QPushButton;
+class QStackedLayout;
+class QTimer;
+class QVBoxLayout;
+class QWidget;
 
 class OverlayWidget : public QWidget
 {
+    Q_OBJECT
     void newParent();
 
 public:
@@ -38,6 +47,7 @@ protected:
 
 class Overlay : public OverlayWidget
 {
+    Q_OBJECT
 public:
     Overlay(QWidget* parent = nullptr);
     ~Overlay();
@@ -62,4 +72,51 @@ private:
 
     QString m_message;
     QRect   m_overlay_rect;
+};
+
+class OverlayHelper : public QObject
+{
+    Q_OBJECT
+public:
+    using CancelFunc = std::function<void()>;
+    explicit OverlayHelper(QObject* parent);
+    ~OverlayHelper();
+
+    void Initialize(QLayout* layout);
+    void Initialize(QWidget* widget);
+
+    QLayout* GetLayout() const;
+
+    // Set message to be displayed on the overlay
+    void SetMessage(const QString& message);
+    void SetMessageIsTimed();
+    void SetMessageCancelFunc(CancelFunc func);
+    void Clear();
+
+    void EnableOverlay();
+    void DisableOverlay();
+
+private slots:
+    void OnUpdate();
+    void OnCancel();
+
+private:
+    bool m_enabled = false;
+
+    // Timer for UI refreshing.
+    QTimer* m_timer = nullptr;
+    // Elapsed time since last timed message / event.
+    std::unique_ptr<QElapsedTimer> m_elapsed_timer;
+
+    CancelFunc m_cancel_func;
+
+    QStackedLayout* m_layout = nullptr;
+    QWidget*        m_overlay = nullptr;
+    QWidget*        m_container = nullptr;
+
+    QVBoxLayout* m_overlay_layout = nullptr;
+    QLabel*      m_text = nullptr;
+    QPushButton* m_cancel_button = nullptr;
+
+    QString m_message;
 };

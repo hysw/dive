@@ -493,9 +493,14 @@ MainWindow::MainWindow()
                                       std::nullopt,
                                       this);
 
-    // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
-    setCentralWidget(horizontal_splitter);
+    m_overlay = new OverlayHelper(this);
+    m_overlay->Initialize(horizontal_splitter);
+
+    // Main Window requires a central widget.
+    auto central_widget = new QWidget;
+    central_widget->setLayout(m_overlay->GetLayout());
+    setCentralWidget(central_widget);
 
     m_middle_group_box->hide();
 
@@ -561,7 +566,6 @@ MainWindow::MainWindow()
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
     // Capture overlay widget
-    m_overlay = new Overlay(this);
     QObject::connect(&m_progress_tracker,
                      SIGNAL(sendMessageSignal(const QString &)),
                      this,
@@ -613,13 +617,6 @@ void MainWindow::OnTraceAvailable(const QString &path)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    QMainWindow::resizeEvent(event);
-    m_overlay->UpdateSize(rect());
-}
-
-//--------------------------------------------------------------------------------------------------
 void MainWindow::OnCommandViewModeChange(const QString &view_mode)
 {
     QObject *sender_object = sender();
@@ -642,7 +639,7 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
     else  // All Vulkan Calls + GPU Events
     {
         const Dive::SharedNodeTopology &topology = command_hierarchy.GetAllEventHierarchyTopology();
-        if (m_gfxr_capture_loaded)
+        if (m_trace_type == LoadedFileType::kGfxrFile)
         {
             m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
         }
@@ -675,7 +672,7 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
     {
         ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
     }
-    else if (m_gfxr_capture_loaded)
+    else if (m_trace_type == LoadedFileType::kGfxrFile)
     {
         ExpandResizeHierarchyView(*m_command_hierarchy_view,
                                   *m_gfxr_vulkan_commands_filter_proxy_model);
@@ -704,7 +701,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
     uint64_t                      selected_item_node_index;
 
-    if (m_gfxr_capture_loaded)
+    if (m_trace_type == LoadedFileType::kGfxrFile)
     {
         QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(index);
         selected_item_node_index = (uint64_t)(source_index.internalPointer());
@@ -766,7 +763,7 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
     m_perf_counter_tab_view->ClearSelection();
     m_gpu_timing_tab_view->ClearSelection();
 
-    if (m_correlated_capture_loaded)
+    if (m_trace_type == LoadedFileType::kDiveFile)
     {
         ClearViewModelSelection(*m_command_hierarchy_view, true);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
@@ -789,7 +786,7 @@ void MainWindow::OnGfxrFilterModeChange()
 
     ResetVerticalScroll(*m_command_hierarchy_view);
     m_command_hierarchy_view->scrollToTop();
-    if (m_correlated_capture_loaded)
+    if (m_trace_type == LoadedFileType::kDiveFile)
     {
         m_pm4_command_hierarchy_view->scrollToTop();
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
@@ -1103,9 +1100,6 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
         return false;
     }
 
-    // We don't want other UI interaction as they cause race conditions.
-    setDisabled(true);
-
     m_progress_tracker.sendMessage("Loading " + file_name);
 
     m_log_record.Reset();
@@ -1127,7 +1121,7 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
         m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
             std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-            auto file_type = LoadFileImpl(file_name, is_temp_file);
+            auto file_type = LoadFileImpl(this, file_name, is_temp_file);
             [[maybe_unused]] int64_t
             time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
@@ -1146,7 +1140,7 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
         // e.g. AnalyzeWindow
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        auto file_type = LoadFileImpl(file_name, is_temp_file);
+        auto file_type = LoadFileImpl(this, file_name, is_temp_file);
         [[maybe_unused]] int64_t
         time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now() - begin)
@@ -1229,7 +1223,9 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
+MainWindow::LoadedFileType MainWindow::LoadFileImpl(MainWindow        *state,
+                                                    const std::string &file_name,
+                                                    bool               is_temp_file)
 {
     // Note: this function might not run on UI thread, thus can't do any UI modification.
 
@@ -1237,12 +1233,12 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
 
     // Check if the file loaded is a .gfxr file.
-    m_gfxr_capture_loaded = (file_extension.compare(Dive::kGfxrSuffix) == 0);
+    bool gfxr_capture_loaded = (file_extension.compare(Dive::kGfxrSuffix) == 0);
 
     // Reset the correlated capture variable
-    m_correlated_capture_loaded = false;
+    bool correlated_capture_loaded = false;
 
-    if (m_gfxr_capture_loaded)
+    if (gfxr_capture_loaded)
     {
         // Convert the filename to a string to perform a replacement.
         std::string potential_asset_name(file_name);
@@ -1266,13 +1262,12 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
 
         if (!asset_file_exists)
         {
-            RunOnUIThread([=]() {
-                HideOverlay();
+            state->RunOnUIThread([=]() {
+                state->HideOverlay();
                 QString title = QString("Unable to open file: %1").arg(file_name.c_str());
                 QString description = QString("Required .gfxa file: %1 not found!")
                                       .arg(QString::fromStdString(asset_file_path.string()));
-                QMessageBox::critical(this, title, description);
-                m_gfxr_capture_loaded = false;
+                QMessageBox::critical(state, title, description);
             });
             return LoadedFileType::kUnknown;
         }
@@ -1293,8 +1288,8 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         // Check if there is a corresponding .rd file
         if (std::filesystem::exists(rd_file_path))
         {
-            m_gfxr_capture_loaded = false;
-            m_correlated_capture_loaded = true;
+            gfxr_capture_loaded = false;
+            correlated_capture_loaded = true;
         }
 
         // Check if there is existing perf counter data
@@ -1302,11 +1297,12 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
                  << perf_counter_file_path.string().c_str();
         if (std::filesystem::exists(perf_counter_file_path))
         {
-            PendingPerfCounterResults(QString::fromStdString(perf_counter_file_path.string()));
+            state->PendingPerfCounterResults(
+            QString::fromStdString(perf_counter_file_path.string()));
         }
         else
         {
-            PendingPerfCounterResults("");
+            state->PendingPerfCounterResults("");
             qDebug() << "Failed to find perf counter data";
         }
 
@@ -1315,11 +1311,11 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
                  << gpu_time_file_path.string().c_str();
         if (std::filesystem::exists(gpu_time_file_path))
         {
-            PendingGpuTimingResults(QString::fromStdWString(gpu_time_file_path.wstring()));
+            state->PendingGpuTimingResults(QString::fromStdWString(gpu_time_file_path.wstring()));
         }
         else
         {
-            PendingGpuTimingResults("");
+            state->PendingGpuTimingResults("");
             qDebug() << "Failed to find gpu timing data";
         }
 
@@ -1327,22 +1323,22 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
         if (std::filesystem::exists(screenshot_file_path))
         {
-            PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
+            state->PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
             qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
         }
         else
         {
-            PendingScreenshot("");
+            state->PendingScreenshot("");
             qDebug() << "Failed to find gfxr capture screenshot";
         }
     }
 
     LoadedFileType file_type = LoadedFileType::kUnknown;
-    if (m_gfxr_capture_loaded)
+    if (gfxr_capture_loaded)
     {
         file_type = LoadedFileType::kGfxrFile;
     }
-    else if (m_correlated_capture_loaded)
+    else if (correlated_capture_loaded)
     {
         file_type = LoadedFileType::kDiveFile;
     }
@@ -1362,52 +1358,55 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
     switch (file_type)
     {
     case LoadedFileType::kUnknown:
-        OnUnsupportedFile(file_name);
+        state->OnUnsupportedFile(file_name);
         break;
     case LoadedFileType::kDiveFile:
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
+        if (Dive::CaptureData::LoadResult load_res = state->m_data_core->LoadDiveCaptureData(
+            file_name);
             load_res != Dive::CaptureData::LoadResult::kSuccess)
         {
-            OnLoadFailure(load_res, file_name);
+            state->OnLoadFailure(load_res, file_name);
             return LoadedFileType::kUnknown;
         }
 
-        if (!m_data_core->ParseDiveCaptureData())
+        if (!state->m_data_core->ParseDiveCaptureData())
         {
-            OnParseFailure(file_name);
+            state->OnParseFailure(file_name);
             return LoadedFileType::kUnknown;
         }
     }
     break;
     case LoadedFileType::kRdFile:
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
+        if (Dive::CaptureData::LoadResult load_res = state->m_data_core->LoadPm4CaptureData(
+            file_name);
             load_res != Dive::CaptureData::LoadResult::kSuccess)
         {
-            OnLoadFailure(load_res, file_name);
+            state->OnLoadFailure(load_res, file_name);
             return LoadedFileType::kUnknown;
         }
 
-        if (!m_data_core->ParsePm4CaptureData())
+        if (!state->m_data_core->ParsePm4CaptureData())
         {
-            OnParseFailure(file_name);
+            state->OnParseFailure(file_name);
             return LoadedFileType::kUnknown;
         }
     }
     break;
     case LoadedFileType::kGfxrFile:
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(file_name);
+        if (Dive::CaptureData::LoadResult load_res = state->m_data_core->LoadGfxrCaptureData(
+            file_name);
             load_res != Dive::CaptureData::LoadResult::kSuccess)
         {
-            OnLoadFailure(load_res, file_name);
+            state->OnLoadFailure(load_res, file_name);
             return LoadedFileType::kUnknown;
         }
 
-        if (!m_data_core->ParseGfxrCaptureData())
+        if (!state->m_data_core->ParseGfxrCaptureData())
         {
-            OnParseFailure(file_name);
+            state->OnParseFailure(file_name);
             return LoadedFileType::kUnknown;
         }
     }
@@ -1423,6 +1422,7 @@ void MainWindow::OnFileLoaded()
 
     // It should return almost immediately, the signal is sent just before async call return.
     auto result = m_loading_result.get();
+    m_trace_type = result.file_type;
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);
@@ -1432,7 +1432,6 @@ void MainWindow::OnFileLoaded()
     }
 
     // Re-enable UI interaction now we are done async loading.
-    setDisabled(false);
     HideOverlay();
 
     switch (result.file_type)
@@ -1516,16 +1515,16 @@ void MainWindow::OnNormalCapture()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
-    if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
+    switch (m_trace_type)
     {
+    case LoadedFileType::kUnknown:
+    case LoadedFileType::kRdFile:
         OnOpenFile();
-    }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
-    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
-    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
-    if (gfxr_capture_loaded)
-    {
-        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
+        break;
+    case LoadedFileType::kDiveFile:
+    case LoadedFileType::kGfxrFile:
+        OnAnalyze(m_capture_file.toStdString());
+        break;
     }
 }
 
@@ -1572,17 +1571,8 @@ void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path)
+void MainWindow::OnAnalyze(const std::string &file_path)
 {
-    if (!is_gfxr_capture_loaded)
-    {
-        QMessageBox::
-        critical(this,
-                 tr("Analyzation Load Failed"),
-                 tr("Unable to analyze without gfxr capture data loaded. Ensure a capture "
-                    "containing gfxr data is loaded before attempting to analyze."));
-        return;
-    }
     QString file_path_q_string = QString::fromStdString(file_path);
     m_analyze_dig->SetSelectedCaptureFile(file_path_q_string);
     m_analyze_dig->open();
@@ -2121,7 +2111,7 @@ void MainWindow::CreateShortcuts()
             m_command_tab_view->OnSearchCommandBuffer();
         }
         ResetEventSearchBar();
-        if (m_correlated_capture_loaded)
+        if (m_trace_type == LoadedFileType::kDiveFile)
         {
             ResetPm4EventSearchBar();
         }
@@ -2171,16 +2161,12 @@ void MainWindow::CreateStatusBar()
 void MainWindow::UpdateOverlay(const QString &message)
 {
     m_overlay->SetMessage(message);
-    if (m_overlay->isHidden())
-        m_overlay->show();
-    m_overlay->repaint();
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnHideOverlay()
 {
-    m_overlay->SetMessage(QString());
-    m_overlay->hide();
+    m_overlay->Clear();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2318,7 +2304,7 @@ void MainWindow::OnTabViewSearchBarVisibilityChange(bool isHidden)
     if (isHidden)
     {
         ResetEventSearchBar();
-        if (m_correlated_capture_loaded)
+        if (m_trace_type == LoadedFileType::kDiveFile)
         {
             ResetPm4EventSearchBar();
         }
@@ -2362,7 +2348,7 @@ void MainWindow::OnTabViewChange()
         !current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
         ResetEventSearchBar();
-        if (m_correlated_capture_loaded)
+        if (m_trace_type == LoadedFileType::kDiveFile)
         {
             ResetPm4EventSearchBar();
         }
@@ -2374,7 +2360,7 @@ void MainWindow::OnTabViewChange()
              ->isHidden())
         {
             ResetEventSearchBar();
-            if (m_correlated_capture_loaded)
+            if (m_trace_type == LoadedFileType::kDiveFile)
             {
                 ResetPm4EventSearchBar();
             }
@@ -2386,7 +2372,7 @@ void MainWindow::OnTabViewChange()
         if (!current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName)->isHidden())
         {
             ResetEventSearchBar();
-            if (m_correlated_capture_loaded)
+            if (m_trace_type == LoadedFileType::kDiveFile)
             {
                 ResetPm4EventSearchBar();
             }
@@ -3145,7 +3131,7 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     QMenu context_menu;
     for (size_t i = 0; i < std::size(Dive::kDrawCallContextMenuOptionStrings) - 1; ++i)
     {
-        if (!m_correlated_capture_loaded &&
+        if (!(m_trace_type == LoadedFileType::kDiveFile) &&
             (i == Dive::DrawCallContextMenuOption::kBinningPassOnly ||
              i == Dive::DrawCallContextMenuOption::kFirstTilePassOnly))
         {
@@ -3306,7 +3292,7 @@ void MainWindow::ClearViewModelSelection(DiveTreeView &tree_view, bool should_cl
         selection_model->setCurrentIndex(QModelIndex(), flags);
     }
 
-    if (should_clear_tab && (m_correlated_capture_loaded || m_gfxr_capture_loaded))
+    if (should_clear_tab && ContainsGfxrFile(m_trace_type))
     {
         m_perf_counter_tab_view->ClearSelection();
     }
@@ -3379,7 +3365,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
         return;
     }
 
-    if (m_correlated_capture_loaded &&
+    if (m_trace_type == LoadedFileType::kDiveFile &&
         (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
          m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly))
     {
@@ -3387,7 +3373,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;
     }
-    else if (m_gfxr_capture_loaded)
+    else if (m_trace_type == LoadedFileType::kGfxrFile)
     {
         CorrelateCounter(index, true);
         return;
@@ -3697,7 +3683,7 @@ void MainWindow::CorrelateCounter(const QModelIndex &index, bool called_from_gfx
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
 {
-    if (m_correlated_capture_loaded)
+    if (m_trace_type == LoadedFileType::kDiveFile)
     {
         QItemSelectionModel *pm4_selection_model = m_pm4_command_hierarchy_view->selectionModel();
         QSignalBlocker       pm4_blocker(pm4_selection_model);
