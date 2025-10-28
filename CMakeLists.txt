@@ -69,6 +69,15 @@ if(GIT_FOUND)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE REPO_SHA1)
     string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
+    execute_process(COMMAND ${GIT_EXECUTABLE} status --porcelain
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE REPO_DIRTY_INFO)
+    string(STRIP "${REPO_DIRTY_INFO}" REPO_DIRTY_INFO_STRIPPED)
+    if("${REPO_DIRTY_INFO_STRIPPED}" STREQUAL "")
+        set(DIVE_REPO_DIRTY "")
+    else()
+        set(DIVE_REPO_DIRTY "dirty")
+    endif()
 endif()
 
 # Adds all the configure time information into dive_cmake_generated.h.in

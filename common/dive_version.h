@@ -18,6 +18,7 @@ limitations under the License.
 #include "common/dive_cmake_generated.h"
 
 #define DIVE_VERSION_SHA1 CMAKE_GENERATED_DIVE_VERSION_SHA1
+#define DIVE_REPO_DIRTY CMAKE_GENERATED_DIVE_REPO_DIRTY
 
 #define DIVE_VERSION_MAJOR 1
 #define DIVE_VERSION_MINOR 0

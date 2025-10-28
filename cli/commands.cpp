@@ -22,6 +22,7 @@
 #include <string>
 
 #include "commands.h"
+#include "cli/cli.h"
 #include "format_output.h"
 
 namespace Dive
@@ -134,12 +135,12 @@ VersionCommand::VersionCommand() :
 
 int VersionCommand::operator()(int argc, int at, char** argv) const
 {
-    const char* rev = Dive::cli::RepositoryVersion();
-    if (rev == nullptr)
+    std::string version = Dive::cli::GetDiveVersion();
+    if (version.empty())
     {
-        rev = "(unknown revision)";
+        version = "(unknown revision)";
     }
-    std::cout << "DiveCLI " << rev << std::endl;
+    std::cout << "DiveCLI " << version << std::endl;
     std::cout << "Capture Format: v" << Dive::cli::FileFormatVersion() << std::endl;
     return EXIT_SUCCESS;
 }
