@@ -93,6 +93,7 @@
 #include "window_scissors_stats_model.h"
 #include "trace_stats/trace_stats.h"
 #include "frame_tab_view.h"
+#include "flow_layout.h"
 
 static constexpr int         kViewModeStringCount = 2;
 static constexpr int         kEventViewModeStringCount = 1;
@@ -232,7 +233,7 @@ MainWindow::MainWindow()
 
         QFrame *text_combo_box_frame = new QFrame();
 
-        QHBoxLayout *text_combo_box_layout = new QHBoxLayout();
+        auto text_combo_box_layout = new FlowLayout();
 
         QLabel *combo_box_label = new QLabel(tr("Mode:"));
 
@@ -258,8 +259,12 @@ MainWindow::MainWindow()
         m_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
         m_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
 
-        text_combo_box_layout->addWidget(combo_box_label);
-        text_combo_box_layout->addWidget(m_view_mode_combo_box, 1);
+        {
+            QHBoxLayout *layout = new QHBoxLayout();
+            layout->addWidget(combo_box_label);
+            layout->addWidget(m_view_mode_combo_box);
+            text_combo_box_layout->addItem(layout);
+        }
 
         QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
         m_filter_mode_combo_box = new TreeViewComboBox();
@@ -275,8 +280,12 @@ MainWindow::MainWindow()
         m_filter_mode_combo_box->setModel(filter_combo_box_model);
         m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
 
-        text_combo_box_layout->addWidget(filter_combo_box_label);
-        text_combo_box_layout->addWidget(m_filter_mode_combo_box, 1);
+        {
+            QHBoxLayout *layout = new QHBoxLayout();
+            layout->addWidget(filter_combo_box_label);
+            layout->addWidget(m_filter_mode_combo_box, 1);
+            text_combo_box_layout->addItem(layout);
+        }
 
         m_event_search_bar = new SearchBar(this);
         m_event_search_bar->setObjectName("Event Search Bar");
@@ -366,7 +375,7 @@ MainWindow::MainWindow()
 
         QFrame *text_combo_box_frame = new QFrame();
 
-        QHBoxLayout *text_combo_box_layout = new QHBoxLayout();
+        auto text_combo_box_layout = new FlowLayout();
 
         QLabel *combo_box_label = new QLabel(tr("Mode:"));
 
@@ -392,8 +401,12 @@ MainWindow::MainWindow()
         m_pm4_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
         m_pm4_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
 
-        text_combo_box_layout->addWidget(combo_box_label);
-        text_combo_box_layout->addWidget(m_pm4_view_mode_combo_box, 1);
+        {
+            QHBoxLayout *layout = new QHBoxLayout();
+            layout->addWidget(combo_box_label);
+            layout->addWidget(m_pm4_view_mode_combo_box, 1);
+            text_combo_box_layout->addItem(layout);
+        }
 
         QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
         m_pm4_filter_mode_combo_box = new TreeViewComboBox();
@@ -409,8 +422,12 @@ MainWindow::MainWindow()
         m_pm4_filter_mode_combo_box->setModel(filter_combo_box_model);
         m_pm4_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
 
-        text_combo_box_layout->addWidget(filter_combo_box_label);
-        text_combo_box_layout->addWidget(m_pm4_filter_mode_combo_box, 1);
+        {
+            QHBoxLayout *layout = new QHBoxLayout();
+            layout->addWidget(filter_combo_box_label);
+            layout->addWidget(m_pm4_filter_mode_combo_box, 1);
+            text_combo_box_layout->addItem(layout);
+        }
 
         m_pm4_search_trigger_button = new QPushButton;
         m_pm4_search_trigger_button->setIcon(QIcon(":/images/search.png"));
@@ -3469,7 +3486,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
     // and performance counters. Only correlate with GPU timing view.
     uint64_t       source_node_index = (uint64_t)source_index.internalPointer();
     Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(source_node_index);
-    bool           is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
+    bool is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
                               (node_type ==
                                Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) ||
                               (node_type == Dive::NodeType::kGfxrVulkanBeginCommandBufferNode);
