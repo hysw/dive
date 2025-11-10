@@ -38,6 +38,7 @@ class QTextEdit;
 class OverlayHelper;
 class MainWindow;
 class QCheckBox;
+class QGroupBox;
 
 namespace Dive
 {
@@ -167,17 +168,18 @@ private:
     QLabel      *m_dump_pm4_label;
     QCheckBox   *m_dump_pm4_box;
 
+    QGroupBox *m_replay_box = nullptr;
+
     QHBoxLayout *m_gpu_time_layout;
     QLabel      *m_gpu_time_label;
-    QCheckBox   *m_gpu_time_box;
+    QGroupBox   *m_gpu_time_box;
 
     QHBoxLayout *m_renderdoc_capture_layout = nullptr;
     QLabel      *m_renderdoc_capture_label = nullptr;
     QCheckBox   *m_renderdoc_capture_box = nullptr;
 
-    QHBoxLayout *m_frame_count_layout;
-    QLabel      *m_frame_count_label;
-    QSpinBox    *m_frame_count_box;
+    QSpinBox *m_frame_count_box_gpu_time_replay = nullptr;
+    QSpinBox *m_frame_count_box_normal_replay = nullptr;
 
     QHBoxLayout *m_replay_warning_layout;
     QLabel      *m_replay_warning_label;

@@ -20,6 +20,7 @@
 #include <QCheckBox>
 #include <QDebug>
 #include <QFileDialog>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -38,6 +39,8 @@
 #include <qapplication.h>
 #include <qtemporarydir.h>
 #include <string>
+
+#include <QPropertyAnimation>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -124,11 +127,22 @@ QWidget                                                            *parent) :
     // Enable GPU Time
     m_gpu_time_layout = new QHBoxLayout();
     m_gpu_time_label = new QLabel(tr("Enable GPU Time:"));
-    m_gpu_time_layout->addWidget(m_gpu_time_label);
-    m_gpu_time_box = new QCheckBox();
-    m_gpu_time_box->setCheckState(Qt::Unchecked);
-    m_gpu_time_layout->addWidget(m_gpu_time_box);
-    m_gpu_time_layout->addStretch();
+    // m_gpu_time_layout->addWidget(m_gpu_time_label);
+    m_gpu_time_box = new QGroupBox();
+    m_gpu_time_box->setTitle("Enable GPU Time");
+    m_gpu_time_box->setCheckable(true);
+    m_gpu_time_box->setChecked(false);
+    m_gpu_time_box->setLayout(m_gpu_time_layout);
+    // m_gpu_time_layout->addWidget(m_gpu_time_box);
+    // m_gpu_time_layout->addStretch();
+    auto replay_layout = new QHBoxLayout();
+    {
+        m_replay_box = new QGroupBox();
+        m_replay_box->setLayout(replay_layout);
+        m_replay_box->setTitle(tr("Enable Normal Replay"));
+        m_replay_box->setCheckable(true);
+        m_replay_box->setChecked(false);
+    }
 
     // Enable Dump Pm4
     m_dump_pm4_layout = new QHBoxLayout();
@@ -149,13 +163,89 @@ QWidget                                                            *parent) :
     m_renderdoc_capture_layout->addStretch();
 
     // Single Frame Loop Count
-    m_frame_count_layout = new QHBoxLayout();
-    m_frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-    m_frame_count_box = new QSpinBox(this);
-    m_frame_count_box->setRange(1, std::numeric_limits<int>::max());
-    m_frame_count_box->setValue(kDefaultFrameCount);
-    m_frame_count_layout->addWidget(m_frame_count_label);
-    m_frame_count_layout->addWidget(m_frame_count_box);
+    {
+        auto frame_count_layout = new QHBoxLayout();
+        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto frame_count_box = new QSpinBox(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
+        frame_count_layout->addWidget(frame_count_label);
+        frame_count_layout->addWidget(frame_count_box);
+        QWidget *frame_count_widget = new QWidget;
+        frame_count_widget->hide();
+        frame_count_widget->setLayout(frame_count_layout);
+        QObject::connect(m_gpu_time_box,
+                         &QGroupBox::clicked,
+                         m_gpu_time_box,
+                         [frame_count_widget](bool checked) {
+                             QPropertyAnimation
+                             *animation = new QPropertyAnimation(frame_count_widget, "size");
+                             animation->setDuration(100);
+                             if (checked)
+                             {
+                                 frame_count_widget->show();
+                                 animation->setStartValue(QSize(frame_count_widget->width(), 0));
+                                 animation->setEndValue(frame_count_widget->size());
+                             }
+                             else
+                             {
+                                 animation->setStartValue(frame_count_widget->size());
+                                 animation->setEndValue(
+                                 QSize(frame_count_widget->size().width(), 0));
+
+                                 // Connect a slot to hide the widget after the animation finishes
+                                 QObject::connect(animation,
+                                                  &QPropertyAnimation::finished,
+                                                  frame_count_widget,
+                                                  &QWidget::hide);
+                             }
+                             animation->start(QAbstractAnimation::DeleteWhenStopped);
+                         });
+        m_frame_count_box_gpu_time_replay = frame_count_box;
+        m_gpu_time_layout->addWidget(frame_count_widget);
+    }
+
+    {
+        auto frame_count_layout = new QHBoxLayout();
+        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto frame_count_box = new QSpinBox(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
+        frame_count_layout->addWidget(frame_count_label);
+        frame_count_layout->addWidget(frame_count_box);
+        QWidget *frame_count_widget = new QWidget;
+        frame_count_widget->hide();
+        frame_count_widget->setLayout(frame_count_layout);
+        QObject::connect(m_replay_box,
+                         &QGroupBox::clicked,
+                         m_replay_box,
+                         [frame_count_widget](bool checked) {
+                             QPropertyAnimation
+                             *animation = new QPropertyAnimation(frame_count_widget, "size");
+                             animation->setDuration(100);
+                             if (checked)
+                             {
+                                 frame_count_widget->show();
+                                 animation->setStartValue(QSize(frame_count_widget->width(), 0));
+                                 animation->setEndValue(frame_count_widget->size());
+                             }
+                             else
+                             {
+                                 animation->setStartValue(frame_count_widget->size());
+                                 animation->setEndValue(
+                                 QSize(frame_count_widget->size().width(), 0));
+
+                                 // Connect a slot to hide the widget after the animation finishes
+                                 QObject::connect(animation,
+                                                  &QPropertyAnimation::finished,
+                                                  frame_count_widget,
+                                                  &QWidget::hide);
+                             }
+                             animation->start(QAbstractAnimation::DeleteWhenStopped);
+                         });
+        m_frame_count_box_normal_replay = frame_count_box;
+        replay_layout->addWidget(frame_count_widget);
+    }
 
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
@@ -185,8 +275,10 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addLayout(m_selected_file_layout);
     m_right_panel_layout->addLayout(m_dump_pm4_layout);
     m_right_panel_layout->addLayout(m_renderdoc_capture_layout);
-    m_right_panel_layout->addLayout(m_gpu_time_layout);
-    m_right_panel_layout->addLayout(m_frame_count_layout);
+    m_right_panel_layout->addWidget(m_replay_box);
+    m_right_panel_layout->addWidget(m_gpu_time_box);
+    // m_right_panel_layout->addLayout(m_gpu_time_layout);
+    // m_right_panel_layout->addLayout(m_frame_count_layout);
     m_right_panel_layout->addLayout(m_replay_warning_layout);
     m_right_panel_layout->addLayout(m_delete_replay_artifacts_layout);
     m_right_panel_layout->addLayout(m_button_layout);
@@ -537,7 +629,7 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = m_frame_count_box_normal_replay->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -582,7 +674,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = m_frame_count_box_gpu_time_replay->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }
