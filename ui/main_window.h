@@ -32,6 +32,7 @@
 #include "dive_core/progress_tracker.h"
 #include "progress_tracker_callback.h"
 #include "dive_core/log.h"
+#include "recent_files.h"
 
 // Forward declarations
 class BufferView;
@@ -74,6 +75,7 @@ class QSortFilterProxyModel;
 class QAbstractProxyModel;
 class FrameTabView;
 class QScrollArea;
+class RecentFiles;
 
 struct LoadFileResult;
 class ErrorDialog;
@@ -168,7 +170,7 @@ private slots:
     void OnShortcuts();
     void OnSaveCapture();
     void OnSearchTrigger();
-    void OpenRecentFile();
+    void OpenRecentFile(const Dive::FilePath&);
     void UpdateOverlay(const QString &);
     void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
@@ -214,7 +216,6 @@ private:
     void    ShowTempStatus(const QString &status_message);
     void    ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
-    void    UpdateRecentFileActions(QStringList recent_files);
     QString StrippedName(const QString &fullFileName);
     void    UpdateTabAvailability();
     void    ResetTabWidget();
@@ -253,7 +254,7 @@ private:
     AnalyzeDialog *m_analyze_dig;
     ErrorDialog   *m_error_dialog = nullptr;
 
-    std::array<QAction *, 3> m_recent_file_actions = {};
+    RecentFiles m_recent_files;
 
     CaptureFileManager *m_capture_manager = nullptr;
 

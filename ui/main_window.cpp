@@ -585,7 +585,11 @@ MainWindow::MainWindow()
     CreateStatusBar();
     CreateShortcuts();
     CreateToolBars();
-    UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
+    m_recent_files.Init();
+    QObject::connect(&m_recent_files,
+                     &RecentFiles::FileSelected,
+                     this,
+                     &MainWindow::OpenRecentFile);
 
     // Capture overlay widget
     QObject::connect(&m_progress_tracker,
@@ -1467,13 +1471,9 @@ void MainWindow::closeEvent(QCloseEvent *closeEvent)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OpenRecentFile()
+void MainWindow::OpenRecentFile(const Dive::FilePath &file)
 {
-    QAction *action = qobject_cast<QAction *>(sender());
-    if (action)
-    {
-        LoadFile(action->data().toString().toStdString().c_str());
-    }
+    LoadFile(file.ToString());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1770,14 +1770,6 @@ void MainWindow::CreateActions()
     connect(m_save_as_action, &QAction::triggered, this, &MainWindow::OnSaveCapture);
     connect(this, &MainWindow::SetSaveAsMenuStatus, m_save_as_action, &QAction::setEnabled);
 
-    // Recent file actions
-    for (auto &action : m_recent_file_actions)
-    {
-        action = new QAction(this);
-        action->setVisible(false);
-        connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
-    }
-
     // Capture action
     m_capture_action = new QAction(tr("&Capture"), this);
     m_capture_action->setStatusTip(tr("Capture a Dive trace"));
@@ -1821,8 +1813,7 @@ void MainWindow::CreateMenus()
     // m_file_menu->addAction(m_save_as_action);
     m_file_menu->addSeparator();
     m_recent_captures_menu = m_file_menu->addMenu(tr("Recent captures"));
-    for (auto action : m_recent_file_actions)
-        m_recent_captures_menu->addAction(action);
+    m_recent_files.InjectActions(m_recent_captures_menu);
     m_file_menu->addSeparator();
     m_file_menu->addAction(m_exit_action);
 
@@ -1967,36 +1958,10 @@ void MainWindow::SetCurrentFile(const QString &file_name, bool is_temp_file)
     if (!file_name.isEmpty() && is_temp_file == false)
     {
         shownName = StrippedName(file_name);
-
-        QStringList recent_files = Settings::Get()->ReadRecentFiles();
-        recent_files.removeAll(file_name);
-        recent_files.prepend(file_name);
-        Settings::Get()->WriteRecentFiles(recent_files);
-        UpdateRecentFileActions(recent_files);
+        m_recent_files.Append(Dive::FilePath{ std::filesystem::path(file_name.toStdString()) });
     }
 
     setWindowTitle(tr("%1[*] - %2").arg(shownName).arg(tr("Dive")));
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::UpdateRecentFileActions(QStringList recent_files)
-{
-    int next_file_index = 0;
-    for (auto action : m_recent_file_actions)
-    {
-        int file_index = next_file_index++;
-        if (file_index < recent_files.count())
-        {
-            QString text = tr("%1").arg(StrippedName(recent_files[file_index]));
-            action->setText(text);
-            action->setData(recent_files[file_index]);
-            action->setVisible(true);
-        }
-        else
-        {
-            action->setVisible(false);
-        }
-    }
 }
 
 //--------------------------------------------------------------------------------------------------
