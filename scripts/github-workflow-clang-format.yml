@@ -39,16 +39,16 @@ BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterColon
 ContinuationIndentWidth: 0
 Cpp11BracedListStyle: false
-# DerivePointerAlignment: true
-# IncludeBlocks: Preserve
+DerivePointerAlignment: true
+IncludeBlocks: Preserve
 IndentCaseLabels: false
 IndentPPDirectives: AfterHash
-# KeepEmptyLinesAtTheStartOfBlocks: true
-# KeepEmptyLinesAtEOF: false
+KeepEmptyLinesAtTheStartOfBlocks: true
+KeepEmptyLinesAtEOF: false
 PackConstructorInitializers: Never
 PenaltyBreakAssignment: 2000
 PenaltyBreakBeforeFirstCallParameter: 10000
-# SortIncludes: Never
+SortIncludes: Never
 SortUsingDeclarations: Lexicographic
 SpaceAfterTemplateKeyword: false
 

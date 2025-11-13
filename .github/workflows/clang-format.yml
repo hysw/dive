@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Generate build files with cmake
+      run: |
+        cp -f scripts/github-workflow-clang-format.yml .clang-format
     - uses: DoozyX/clang-format-lint-action@v0.20
       with:
         source: '.'
