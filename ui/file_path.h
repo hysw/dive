@@ -21,7 +21,7 @@
 #include <QMetaType>
 #include <QString>
 
-#include "utils/component_files.h"
+#include "dive/utils/component_files.h"
 
 namespace Dive
 {

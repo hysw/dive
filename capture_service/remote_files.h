@@ -18,7 +18,7 @@ limitations under the License.
 
 #include <filesystem>
 
-#include "utils/component_files_constants.h"
+#include "dive/utils/component_files_constants.h"
 
 namespace Dive
 {

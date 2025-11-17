@@ -28,7 +28,7 @@
 #include <QVBoxLayout>
 #include <sstream>
 
-#include "utils/version_info.h"
+#include "dive/utils/version_info.h"
 
 // =================================================================================================
 // AboutDialog

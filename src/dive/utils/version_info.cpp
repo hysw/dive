@@ -14,15 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "version_info.h"
+#include "dive/utils/version_info.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "dive/build_defs/version_defs.h"
 
 namespace
 {

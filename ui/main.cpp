@@ -25,7 +25,7 @@
 #include "dive_core/pm4_info.h"
 #include "application_controller.h"
 #include "main_window.h"
-#include "utils/version_info.h"
+#include "dive/utils/version_info.h"
 #include "custom_metatypes.h"
 #ifdef __linux__
 #    include <dlfcn.h>

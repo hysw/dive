@@ -31,10 +31,10 @@ limitations under the License.
 #include "android_application.h"
 #include "command_utils.h"
 #include "constants.h"
-#include "common/log.h"
-#include "common/macros.h"
+#include "dive/common/log.h"
+#include "dive/common/macros.h"
 #include "remote_files.h"
-#include "utils/component_files.h"
+#include "dive/utils/component_files.h"
 
 namespace Dive
 {

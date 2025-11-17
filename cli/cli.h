@@ -29,7 +29,6 @@ namespace cli
 void Init();
 bool IsConsoleOutput();
 
-const char *RepositoryVersion();
 std::string FileFormatVersion();
 
 //--------------------------------------------------------------------------------------------------

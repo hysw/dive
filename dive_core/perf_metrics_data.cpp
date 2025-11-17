@@ -33,7 +33,7 @@
 #include "absl/base/no_destructor.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
-#include "utils/string_utils.h"
+#include "dive/utils/string_utils.h"
 
 namespace Dive
 {

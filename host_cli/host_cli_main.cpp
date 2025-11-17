@@ -29,7 +29,7 @@
 #include "absl/strings/str_cat.h"
 
 #include "data_core_wrapper.h"
-#include "utils/version_info.h"
+#include "dive/utils/version_info.h"
 
 namespace
 {

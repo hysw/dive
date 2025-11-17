@@ -51,7 +51,7 @@
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
-#include "utils/component_files.h"
+#include "dive/utils/component_files.h"
 
 namespace
 {

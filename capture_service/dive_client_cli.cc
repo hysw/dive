@@ -35,7 +35,7 @@ limitations under the License.
 #include "device_mgr.h"
 #include "network/tcp_client.h"
 #include "absl/strings/str_cat.h"
-#include "utils/version_info.h"
+#include "dive/utils/version_info.h"
 
 using namespace std::chrono_literals;
 

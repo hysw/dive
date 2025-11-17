@@ -20,7 +20,7 @@
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
-#include "utils/component_files.h"
+#include "dive/utils/component_files.h"
 
 #pragma once
 

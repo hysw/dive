@@ -21,7 +21,7 @@ limitations under the License.
 #include <string>
 #include <thread>
 
-#include "common/log.h"
+#include "dive/common/log.h"
 
 extern "C"
 {
