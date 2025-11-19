@@ -34,6 +34,7 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
 #include "utils/string_utils.h"
+#include "index_wrapper.h"
 
 namespace Dive
 {
@@ -45,78 +46,33 @@ bool IsMetricsRecordDrawOrDispatch(const PerfMetricsRecord& record)
     return record.m_draw_type == 1 || record.m_draw_type == 3;
 }
 
-// A wrapper type for uint64_t / size_t to reduce the chance of using the wrong index.
-template<typename ValueT, typename TagT = void> class IndexWrapper
+template<typename T1, typename Tag1, typename T2, typename Tag2>
+auto IndexInto(const std::vector<IndexWrapper<T2, Tag2>>& mapping, IndexWrapper<T1, Tag1> index)
+-> IndexWrapper<T2, Tag2>
 {
-public:
-    using ValueType = ValueT;
-    using TagType = TagT;
-
-    struct Hash
+    if (index.has_value() && index.value() < mapping.size())
     {
-        std::hash<ValueType> m_impl;
-
-        auto operator()(const IndexWrapper& w) const { return m_impl(w.m_value); }
-    };
-
-    static constexpr ValueType kInvalid = std::numeric_limits<ValueType>::max();
-
-    IndexWrapper() = default;
-    explicit IndexWrapper(ValueType value) :
-        m_value(value)
-    {
+        return mapping.at(index.value());
     }
+    return IndexWrapper<T2, Tag2>();
+}
 
-    std::optional<ValueT> AsOptional() const
+template<typename T1, typename Tag1, typename T2, typename Tag2>
+auto IndexInto(const std::unordered_map<IndexWrapper<T1, Tag1>,
+                                        IndexWrapper<T2, Tag2>,
+                                        typename IndexWrapper<T1, Tag1>::Hash>& mapping,
+               IndexWrapper<T1, Tag1> index) -> IndexWrapper<T2, Tag2>
+{
+    if (!index.has_value())
     {
-        if (has_value())
-        {
-            return value();
-        }
-        return std::nullopt;
+        return IndexWrapper<T2, Tag2>();
     }
-
-    // std::optional
-    bool      has_value() const { return m_value != kInvalid; }
-    ValueType value() const
+    if (auto iter = mapping.find(index); iter != mapping.end())
     {
-        assert(has_value());
-        return m_value;
+        return iter->second;
     }
-
-    ValueType operator*() const { return value(); }
-    explicit  operator bool() const { return has_value(); }
-
-    template<typename T, typename Tag>
-    auto Into(const std::vector<IndexWrapper<T, Tag>>& v) -> IndexWrapper<T, Tag>
-    {
-        if (has_value() && value() < v.size())
-        {
-            return v[value()];
-        }
-        return IndexWrapper<T, Tag>();
-    }
-
-    template<typename T, typename Tag>
-    auto Into(const std::unordered_map<IndexWrapper, IndexWrapper<T, Tag>, Hash>& m)
-    -> IndexWrapper<T, Tag>
-    {
-        if (!has_value())
-        {
-            return IndexWrapper<T, Tag>();
-        }
-        if (auto iter = m.find(*this); iter != m.end())
-        {
-            return iter->second;
-        }
-        return IndexWrapper<T, Tag>();
-    }
-
-    bool operator==(const IndexWrapper& other) const { return m_value == other.m_value; }
-
-private:
-    ValueType m_value = kInvalid;
-};
+    return IndexWrapper<T2, Tag2>();
+}
 
 }  // namespace
 
@@ -332,17 +288,17 @@ public:
 
     size_t GetPatternSize() const { return m_metric_to_draw.size(); }
 
-    MetricIndex MatchOf(RecordIndex index) const { return index.Into(m_record_to_metric); }
+    MetricIndex MatchOf(RecordIndex index) const { return IndexInto(m_record_to_metric, index); }
 
-    NodeIndex GetNodeFromDraw(DrawIndex index) const { return index.Into(m_draw_to_node); }
-    DrawIndex GetDrawFromNode(NodeIndex index) const { return index.Into(m_node_to_draw); }
+    NodeIndex GetNodeFromDraw(DrawIndex index) const { return IndexInto(m_draw_to_node, index); }
+    DrawIndex GetDrawFromNode(NodeIndex index) const { return IndexInto(m_node_to_draw, index); }
     DrawIndex GetDrawFromMetric(MetricIndex index) const
     {
-        return RequireCorrelationEnabled(index).Into(m_metric_to_draw);
+        return IndexInto(m_metric_to_draw, RequireCorrelationEnabled(index));
     }
     MetricIndex GetMetricFromDraw(DrawIndex index) const
     {
-        return RequireCorrelationEnabled(index).Into(m_draw_to_metric);
+        return IndexInto(m_draw_to_metric, RequireCorrelationEnabled(index));
     }
     NodeIndex GetNodeFromMetric(MetricIndex index) const
     {
