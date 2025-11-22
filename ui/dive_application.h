@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,22 +14,19 @@
  limitations under the License.
 */
 
-#include <QScopedPointer>
+#pragma once
 
-#include "dive_application.h"
-#include "runtime_setup.h"
+#include <QApplication>
+#include <QObject>
 
-//--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+class DiveApplication : public QApplication
 {
-    DiveApplicationRuntimeGuard runtime(argc, argv);
-    runtime.InstallCrashHandler();
-    runtime.ParseFlags();
+    Q_OBJECT
+public:
+    static DiveApplication* Create(int argc, char* argv[]);
 
-    QScopedPointer<DiveApplication> app(DiveApplication::Create(argc, argv));
-    if (app == nullptr)
-    {
-        return EXIT_FAILURE;
-    }
-    return app->exec();
-}
+private:
+    DiveApplication(int argc, char *argv[]);
+
+    void Initialize();
+};

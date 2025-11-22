@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,22 +14,20 @@
  limitations under the License.
 */
 
-#include <QScopedPointer>
+#pragma once
 
-#include "dive_application.h"
-#include "runtime_setup.h"
+#include "impl_pointer.h"
 
-//--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+class DiveApplicationRuntimeGuard
 {
-    DiveApplicationRuntimeGuard runtime(argc, argv);
-    runtime.InstallCrashHandler();
-    runtime.ParseFlags();
+public:
+    struct Impl;
+    DiveApplicationRuntimeGuard(int argc, char* argv[]);
+    ~DiveApplicationRuntimeGuard();
 
-    QScopedPointer<DiveApplication> app(DiveApplication::Create(argc, argv));
-    if (app == nullptr)
-    {
-        return EXIT_FAILURE;
-    }
-    return app->exec();
-}
+    void InstallCrashHandler();
+    void ParseFlags();
+
+private:
+    ImplPointer<Impl> m_impl;
+};

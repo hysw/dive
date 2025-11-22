@@ -34,8 +34,82 @@ set(CMAKE_CXX_STANDARD 20)
 # Find the QtWidgets library
 find_package(Qt5Widgets CONFIG REQUIRED)
 
+list(APPEND
+    DIVE_UI_EVENT_TIMING_SRC_FILES
+    event_timing/event_graphics_item.cpp
+    event_timing/event_timing_graphics_scene.cpp
+    event_timing/event_timing_graphics_view.cpp
+    event_timing/event_timing_view.cpp
+)
+
+list(APPEND
+    DIVE_UI_SQTT_SRC_FILES
+    sqtt/ruler_graphics_item.cpp
+)
+
+list(APPEND
+    DIVE_UI_SRC_FILES
+    about_window.cpp
+    analyze_window.cpp
+    application_controller.cpp
+    buffer_view.cpp
+    capture_file_manager.cpp
+    color_utils.cpp
+    command_buffer_model.cpp
+    command_buffer_view.cpp
+    command_model.cpp
+    command_tab_view.cpp
+    custom_metatypes.cpp
+    dive_application.cpp
+    dive_tree_view.cpp
+    draw_dispatch_stats_model.cpp
+    draw_dispatch_stats_tab_view.cpp
+    error_dialog.cpp
+    event_selection_model.cpp
+    event_state_view.cpp
+    frame_tab_view.cpp
+    gfxr_vulkan_command_arguments_filter_proxy_model.cpp
+    gfxr_vulkan_command_arguments_tab_view.cpp
+    gfxr_vulkan_command_filter_proxy_model.cpp
+    gfxr_vulkan_command_filter.cpp
+    gfxr_vulkan_command_model.cpp
+    gpu_timing_model.cpp
+    gpu_timing_tab_view.cpp
+    hover_help_model.cpp
+    main_window.cpp
+    main.cpp
+    misc_stats_model.cpp
+    misc_stats_tab_view.cpp
+    most_expensive_events_view.cpp
+    overlay.cpp
+    overview_tab_view.cpp
+    package_filter.cpp
+    perf_counter_model.cpp
+    perf_counter_tab_view.cpp
+    problems_view.cpp
+    progress_tracker_callback.cpp
+    property_panel.cpp
+    runtime_setup.cpp
+    search_bar.cpp
+    search_dialog.cpp
+    settings.cpp
+    shader_text_view.cpp
+    shader_view.cpp
+    shortcuts_window.cpp
+    text_file_view.cpp
+    tile_stats_tab_view.cpp
+    tool_tip_summaries.cpp
+    trace_window.cpp
+    tree_view_combo_box.cpp
+    viewport_stats_model.cpp
+    window_scissors_stats_model.cpp
+)
+
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(APPEND SRC_FILES ${DIVE_UI_EVENT_TIMING_SRC_FILES})
+list(APPEND SRC_FILES ${DIVE_UI_SQTT_SRC_FILES})
+list(APPEND SRC_FILES ${DIVE_UI_SRC_FILES})
+    
 if(MSVC)
     # Add resource files for Windows build (for version information)
     file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")

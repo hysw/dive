@@ -22,9 +22,7 @@
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    DiveApplicationRuntimeGuard runtime(argc, argv);
-    runtime.InstallCrashHandler();
-    runtime.ParseFlags();
+    DiveApplicationRuntimeGuard runtime_guard(argc, argv);
 
     QScopedPointer<DiveApplication> app(DiveApplication::Create(argc, argv));
     if (app == nullptr)
