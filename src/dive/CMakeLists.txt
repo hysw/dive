@@ -15,4 +15,5 @@
 #
 
 add_subdirectory(build_defs)
+add_subdirectory(gpu_time)
 add_subdirectory(utils)

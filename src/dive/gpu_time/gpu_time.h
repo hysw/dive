@@ -16,14 +16,15 @@ limitations under the License.
 
 #pragma once
 
-#include "vulkan/vulkan_core.h"
+#include <atomic>
+#include <deque>
+#include <limits>
 #include <set>
 #include <string>
-#include <vector>
-#include <deque>
 #include <unordered_map>
-#include <limits>
-#include <atomic>
+#include <vector>
+
+#include "vulkan/vulkan_core.h"
 
 namespace Dive
 {

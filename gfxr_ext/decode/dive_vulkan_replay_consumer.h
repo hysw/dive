@@ -19,7 +19,7 @@ limitations under the License.
 #define GFXRECON_DECODE_VULKAN_DIVE_CONSUMER_H
 
 #include "generated/generated_vulkan_replay_consumer.h"
-#include "gpu_time/gpu_time.h"
+#include "dive/gpu_time/gpu_time.h"
 #include <set>
 #include <vector>
 #include <unordered_map>

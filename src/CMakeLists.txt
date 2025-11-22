@@ -26,4 +26,10 @@ target_include_directories(
     INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/dive"
 )
 
+add_library(dive_vulkan_includes INTERFACE)
+target_include_directories(
+    dive_vulkan_includes
+    INTERFACE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+)
+
 add_subdirectory(dive)

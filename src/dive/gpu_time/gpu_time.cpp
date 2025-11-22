@@ -14,19 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "gpu_time.h"
+#include "dive/gpu_time/gpu_time.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <algorithm>
-#include <cmath>
-#include <numeric>
 #include <limits>
-#include <sstream>
-#include <cstring>
+#include <numeric>
 #include <optional>
+#include <sstream>
 #include <thread>
-#include <chrono>
 
 namespace Dive
 {

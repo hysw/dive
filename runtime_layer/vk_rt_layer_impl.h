@@ -25,7 +25,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "gpu_time.h"
+#include "dive/gpu_time/gpu_time.h"
 
 namespace DiveLayer
 {
