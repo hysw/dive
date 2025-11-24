@@ -69,21 +69,21 @@ for this purpose.
 
 1. Create a branch to contain the merge
 2. Run the pull command: 
-```
+```sh
 git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
 ```
 3. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
-```
+```sh
 git add third_party/gfxreconstruct
 git commit -m "Merge third_party/gfxreconstruct updates"
 ```
 4. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
 5. Update submodules:
-```
+```sh
 git submodule update --init --recursive
 ```
 6. Regenerate GFXR Vulkan code:
-```
+```sh
 cd third_party/gfxreconstruct/framework/generated
 python generate_vulkan.py
 ```
