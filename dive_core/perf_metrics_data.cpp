@@ -13,26 +13,28 @@
 
 #include "dive_core/perf_metrics_data.h"
 
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <iostream>
-#include <filesystem>
 #include <limits>
 #include <optional>
 #include <string>
-#include <vector>
-#include <array>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "absl/base/no_destructor.h"
-#include "dive_core/command_hierarchy.h"
+#include "dive/types/named_index.h"
+#include "dive/types/wrapper.h"
 #include "dive_core/available_metrics.h"
+#include "dive_core/command_hierarchy.h"
 #include "utils/string_utils.h"
 
 namespace Dive
@@ -45,77 +47,52 @@ bool IsMetricsRecordDrawOrDispatch(const PerfMetricsRecord& record)
     return record.m_draw_type == 1 || record.m_draw_type == 3;
 }
 
-// A wrapper type for uint64_t / size_t to reduce the chance of using the wrong index.
-template<typename ValueT, typename TagT = void> class IndexWrapper
+template<typename From, typename To>  // Mapping: From => To
+struct ArrayMap : public Wrapper<std::vector<To>>
 {
-public:
-    using ValueType = ValueT;
-    using TagType = TagT;
+    using Wrapper<std::vector<To>>::Wrapper;
+    auto clear() { return this->value().clear(); }
+    auto empty() const { return this->value().empty(); }
+    auto size() const { return this->value().size(); }
 
-    struct Hash
+    void push_back(const To& to_value) { this->value().push_back(to_value); }
+
+    To&       operator[](const From& index) { return this->value()[index.value()]; }
+    const To& operator[](const From& index) const = delete;
+
+    To At(const From& index) const
     {
-        std::hash<ValueType> m_impl;
-
-        auto operator()(const IndexWrapper& w) const { return m_impl(w.m_value); }
-    };
-
-    static constexpr ValueType kInvalid = std::numeric_limits<ValueType>::max();
-
-    IndexWrapper() = default;
-    explicit IndexWrapper(ValueType value) :
-        m_value(value)
-    {
-    }
-
-    std::optional<ValueT> AsOptional() const
-    {
-        if (has_value())
+        if (index.has_value() && index.value() < this->value().size())
         {
-            return value();
+            return this->value()[index.value()];
         }
-        return std::nullopt;
+        return To::Invalid();
     }
+};
 
-    // std::optional
-    bool      has_value() const { return m_value != kInvalid; }
-    ValueType value() const
+template<typename From, typename To>  // Mapping: From => To
+struct HashMap : public Wrapper<std::unordered_map<From, To, typename From::Hash>>
+{
+    using Wrapper<std::unordered_map<From, To, typename From::Hash>>::Wrapper;
+    auto clear() { return this->value().clear(); }
+    auto empty() const { return this->value().empty(); }
+    auto size() const { return this->value().size(); }
+
+    To&       operator[](const From& index) { return this->value()[index]; }
+    const To& operator[](const From& index) = delete;
+
+    To At(const From& index) const
     {
-        assert(has_value());
-        return m_value;
-    }
-
-    ValueType operator*() const { return value(); }
-    explicit  operator bool() const { return has_value(); }
-
-    template<typename T, typename Tag>
-    auto Into(const std::vector<IndexWrapper<T, Tag>>& v) -> IndexWrapper<T, Tag>
-    {
-        if (has_value() && value() < v.size())
+        if (!index.has_value())
         {
-            return v[value()];
+            return To::Invalid();
         }
-        return IndexWrapper<T, Tag>();
-    }
-
-    template<typename T, typename Tag>
-    auto Into(const std::unordered_map<IndexWrapper, IndexWrapper<T, Tag>, Hash>& m)
-    -> IndexWrapper<T, Tag>
-    {
-        if (!has_value())
-        {
-            return IndexWrapper<T, Tag>();
-        }
-        if (auto iter = m.find(*this); iter != m.end())
+        if (auto iter = this->value().find(index); iter != this->value().end())
         {
             return iter->second;
         }
-        return IndexWrapper<T, Tag>();
+        return To::Invalid();
     }
-
-    bool operator==(const IndexWrapper& other) const { return m_value == other.m_value; }
-
-private:
-    ValueType m_value = kInvalid;
 };
 
 }  // namespace
@@ -301,19 +278,14 @@ PerfMetricsData::PerfMetricsData(std::vector<std::string>       metric_names,
 
 class PerfMetricsDataProvider::Correlator
 {
-    struct NodeTag;
-    struct DrawTag;
-    struct MetricTag;
-    struct RecordTag;
-
 public:
     // Mapping: NodeIndex <-> DrawIndex <-> MetricIndex
-    using NodeIndex = IndexWrapper<uint64_t, NodeTag>;
-    using DrawIndex = IndexWrapper<uint64_t, DrawTag>;
-    using MetricIndex = IndexWrapper<size_t, MetricTag>;
+    DIVE_DEFINE_TYPED_INDEX(NodeIndex, uint64_t);
+    DIVE_DEFINE_TYPED_INDEX(DrawIndex, uint64_t);
+    DIVE_DEFINE_TYPED_INDEX(MetricIndex, size_t);
 
     // RecordIndex is index into raw metric data.
-    using RecordIndex = IndexWrapper<size_t, RecordTag>;
+    DIVE_DEFINE_TYPED_INDEX(RecordIndex, size_t);
 
     void Reset()
     {
@@ -332,17 +304,17 @@ public:
 
     size_t GetPatternSize() const { return m_metric_to_draw.size(); }
 
-    MetricIndex MatchOf(RecordIndex index) const { return index.Into(m_record_to_metric); }
+    MetricIndex MatchOf(RecordIndex index) const { return m_record_to_metric.At(index); }
 
-    NodeIndex GetNodeFromDraw(DrawIndex index) const { return index.Into(m_draw_to_node); }
-    DrawIndex GetDrawFromNode(NodeIndex index) const { return index.Into(m_node_to_draw); }
+    NodeIndex GetNodeFromDraw(DrawIndex index) const { return m_draw_to_node.At(index); }
+    DrawIndex GetDrawFromNode(NodeIndex index) const { return m_node_to_draw.At(index); }
     DrawIndex GetDrawFromMetric(MetricIndex index) const
     {
-        return RequireCorrelationEnabled(index).Into(m_metric_to_draw);
+        return m_metric_to_draw.At(RequireCorrelationEnabled(index));
     }
     MetricIndex GetMetricFromDraw(DrawIndex index) const
     {
-        return RequireCorrelationEnabled(index).Into(m_draw_to_metric);
+        return m_draw_to_metric.At(RequireCorrelationEnabled(index));
     }
     NodeIndex GetNodeFromMetric(MetricIndex index) const
     {
@@ -354,9 +326,6 @@ public:
     }
 
 private:
-    template<typename, typename U> using ArrayMap = std::vector<U>;
-    template<typename T, typename U> using HashMap = std::unordered_map<T, U, typename T::Hash>;
-
     static void ExtractDraws(const CommandHierarchy&         command_hierarchy,
                              ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
                              HashMap<NodeIndex, DrawIndex>&  out_node_to_draw);
@@ -417,7 +386,7 @@ HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
             size_t base = actual_draws.size() - alias_draws.size();
             for (size_t i = 0; i < alias_draws.size(); ++i)
             {
-                node_to_draw[alias_draws[i]] = DrawIndex(base + i);
+                node_to_draw[alias_draws[DrawIndex(i)]] = DrawIndex(base + i);
             }
         }
         alias_draws.clear();
@@ -462,11 +431,11 @@ HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
     dedupe();
     for (size_t i = 0; i < actual_draws.size(); ++i)
     {
-        node_to_draw[actual_draws[i]] = DrawIndex(i);
+        node_to_draw[actual_draws[DrawIndex(i)]] = DrawIndex(i);
     }
     for (size_t i = 0; i < gfxr_draws.size(); ++i)
     {
-        node_to_draw[gfxr_draws[i]] = DrawIndex(i);
+        node_to_draw[gfxr_draws[DrawIndex(i)]] = DrawIndex(i);
     }
 
     if (!actual_draws.empty())
@@ -546,12 +515,12 @@ const std::vector<PerfMetricsRecord>& records)
 
     ArrayMap<DrawIndex, MetricIndex> draw_to_metric;
     ArrayMap<MetricIndex, DrawIndex> metric_to_draw;
-    metric_to_draw.resize(template_frame_size);
+    metric_to_draw.value().resize(template_frame_size);
     for (size_t i = 0; i < template_frame_size; ++i)
     {
         if (IsMetricsRecordDrawOrDispatch(records[template_frame_start + i]))
         {
-            metric_to_draw[i] = DrawIndex(draw_to_metric.size());
+            metric_to_draw[MetricIndex(i)] = DrawIndex(draw_to_metric.size());
             draw_to_metric.push_back(MetricIndex(i));
         }
     }
@@ -566,7 +535,7 @@ const std::vector<PerfMetricsRecord>& records)
         records.data() + template_frame_start + template_frame_size,
     };
 
-    ArrayMap<RecordIndex, MetricIndex> record_to_metric(records.size());
+    ArrayMap<RecordIndex, MetricIndex> record_to_metric(std::in_place, records.size());
     {
         size_t frame_start = 0;
         auto   emit_frame = [&](size_t start, size_t end) {
@@ -578,7 +547,7 @@ const std::vector<PerfMetricsRecord>& records)
             const size_t frame_size = end - start;
             for (int i = 0; i < frame_size; ++i)
             {
-                record_to_metric[start + i] = MetricIndex(i);
+                record_to_metric[RecordIndex(start + i)] = MetricIndex(i);
             }
         };
         for (size_t i = 0; i < records.size(); ++i)
