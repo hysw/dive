@@ -16,8 +16,9 @@
 
 #include "analyze_window.h"
 
-#include <QComboBox>
+#include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDebug>
 #include <QFileDialog>
 #include <QGroupBox>
@@ -25,32 +26,41 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTemporaryDir>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <filesystem>
 #include <future>
 #include <optional>
-#include <qapplication.h>
-#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
-#include "application_controller.h"
-#include "settings.h"
-#include "overlay.h"
 #include "common/macros.h"
+#include "ui/application_controller.h"
+#include "ui/overlay.h"
+#include "ui/settings.h"
+
+namespace
+{
+constexpr int kDefaultFrameCount = 3;
+// Metric items:
+constexpr int kMetricKeyRole = Qt::UserRole + 1;
+constexpr int kMetricDescriptionRole = Qt::UserRole + 2;
+// Device items:
+constexpr int kDeviceSerialRole = Qt::UserRole + 1;
+}  // namespace
 
 //--------------------------------------------------------------------------------------------------
-void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
+void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
 {
     if (std::filesystem::remove(file_path))
     {
@@ -62,216 +72,430 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
     }
 }
 
-// =================================================================================================
-// AnalyzeDialog
-// =================================================================================================
-AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
-                             const Dive::AvailableMetrics *available_metrics,
-                             QWidget                      *parent) :
-    QDialog(parent),
-    m_controller(controller),
-    m_available_metrics(available_metrics)
+struct AnalyzeDialog::ReplayConfig
 {
-    qDebug() << "AnalyzeDialog created.";
+    std::string device_serial = {};
 
-    m_overlay = new OverlayHelper(this);
+    bool replay_dump_pm4 = false;
+    bool replay_gpu_time = false;
+    bool replay_renderdoc = false;
+    bool replay_perf_counter = false;
+    bool replay_custom = false;
 
-    // Metrics List
-    m_metrics_list_label = new QLabel(tr("Available Metrics:"));
-    m_metrics_list = new QListWidget();
-    m_csv_items = new QVector<CsvItem>();
-    m_enabled_metrics_vector = new std::vector<std::string>();
-    PopulateMetrics();
+    int replay_custom_frame_count;
+    int replay_gpu_time_frame_count;
 
-    // Metrics Description
+    std::vector<std::string> selected_metrics = {};
+};
+
+struct AnalyzeDialog::Impl
+{
+
+    struct ReplaySelection
+    {
+        QGroupBox* custom_replay = nullptr;
+        QCheckBox* dump_pm4 = nullptr;
+        QCheckBox* perf_counter = nullptr;
+        QGroupBox* gpu_time_replay = nullptr;
+        QCheckBox* renderdoc_capture = nullptr;
+    };
+
+    struct ReplayArgs
+    {
+        QSpinBox* m_gpu_time_replay_frame_count = nullptr;
+        QSpinBox* m_custom_replay_frame_count = nullptr;
+    };
+
+    struct PerfCounterElements
+    {
+        const Dive::AvailableMetrics* m_available_metrics = nullptr;
+
+        bool m_available = false;
+
+        QLabel*      m_metrics_list_label = nullptr;
+        QListWidget* m_metrics_list = nullptr;
+
+        QLabel*    m_selected_metrics_description_label = nullptr;
+        QTextEdit* m_selected_metrics_description = nullptr;
+
+        QLabel*      m_enabled_metrics_list_label = nullptr;
+        QListWidget* m_enabled_metrics_list = nullptr;
+
+        void Initialize();
+        void PopulateMetrics();
+        void UpdateEnabledMetrics();
+        void PopulateSelectedMetrics(std::vector<std::string>& metrics);
+        void SetEnabled(bool enabled);
+        void Hide();
+    };
+
+    struct AsyncExecuting
+    {
+        std::optional<std::string> pending_device_serial;
+        std::optional<std::string> device_selection_error;
+    };
+    struct AsyncPending
+    {
+        std::optional<std::string> pending_device_serial;
+    };
+
+    AnalyzeDialog&         m_parent;
+    ApplicationController& m_controller;
+
+    OverlayHelper* m_overlay = nullptr;
+
+    ReplayConfig        m_config;
+    PerfCounterElements m_perf_counter_elems;
+
+    std::future<void> m_async_active;
+    AsyncExecuting    m_async_executing;
+    AsyncPending      m_async_pending;
+
+    // Other artifacts
+    Dive::ComponentFilePaths m_local_capture_files = {};
+
+    QLayout* CreateLayout();
+
+    void InitializePerfCounterElements();
+
+    QHBoxLayout* CreateReplayButtonLayout();
+    QHBoxLayout* CreateDeviceSelectorLayout();
+    QHBoxLayout* CreateSelectedFileLayout();
+    QHBoxLayout* CreateReplayWarningLayout();
+    QHBoxLayout* CreateDeleteReplayArtifactsLayout();
+
+    QGroupBox* CreateCustomReplayBox();
+    QCheckBox* CreatePm4ReplayBox();
+    QCheckBox* CreatePerfCounterReplayBox();
+    QGroupBox* CreateGpuTimeReplayBox();
+    QCheckBox* CreateRenderDocReplayBox();
+
+    void DispatchAsync();
+    void ExecuteAsync();
+    void ExecuteAsyncSelectDevice();
+    void OnAsyncFinished();
+};
+
+using Impl = AnalyzeDialog::Impl;
+using PerfCounterElements = AnalyzeDialog::Impl::PerfCounterElements;
+
+void PerfCounterElements::UpdateEnabledMetrics()
+{
+    auto& metrics = *m_enabled_metrics_list;
+    metrics.clear();
+    for (auto item : m_metrics_list->selectedItems())
+    {
+        metrics.addItem(item->text());
+    }
+}
+
+void PerfCounterElements::PopulateSelectedMetrics(std::vector<std::string>& metrics)
+{
+    metrics.clear();
+    for (auto item : m_metrics_list->selectedItems())
+    {
+        metrics.push_back(item->data(kMetricKeyRole).toString().toStdString());
+    }
+}
+
+void PerfCounterElements::Initialize()
+{
+    m_metrics_list_label = new QLabel(tr("Available Metrics:")), m_metrics_list = new QListWidget();
+
     m_selected_metrics_description_label = new QLabel(tr("Description:"));
     m_selected_metrics_description = new QTextEdit();
     m_selected_metrics_description->setReadOnly(true);
     m_selected_metrics_description->setPlaceholderText("Select a metric to see its description...");
 
-    // Enabled Metrics
     m_enabled_metrics_list_label = new QLabel(tr("Enabled Metrics:"));
     m_enabled_metrics_list = new QListWidget();
+}
 
-    // Replay Button
-    m_button_layout = new QHBoxLayout();
-    m_replay_button = new QPushButton("&Replay", this);
-    m_replay_button->setEnabled(false);
-    m_button_layout->addWidget(m_replay_button);
+void Impl::InitializePerfCounterElements()
+{
+    m_perf_counter_elems.Initialize();
+    m_perf_counter_elems.PopulateMetrics();
 
-    // Device Selector
-    m_device_layout = new QHBoxLayout();
-    m_device_label = new QLabel(tr("Devices:"));
-    m_device_model = new QStandardItemModel();
-    m_device_box = new QComboBox();
-    m_device_refresh_button = new QPushButton("&Refresh", this);
-    m_devices = Dive::GetDeviceManager().ListDevice();
-    UpdateDeviceList(false);
-    m_device_box->setCurrentText("Please select a device");
-    m_device_box->setModel(m_device_model);
-    m_device_box->setCurrentIndex(0);
-    m_device_layout->addWidget(m_device_label);
-    m_device_layout->addWidget(m_device_box);
-    m_device_layout->addWidget(m_device_refresh_button);
-
-    // Selected File
-    m_selected_file_layout = new QHBoxLayout();
-    m_selected_file_label = new QLabel("Selected Capture file:");
-    m_selected_file_input_box = new QLineEdit();
-    m_selected_capture_file_string = "";
-    m_selected_file_input_box->setText(m_selected_capture_file_string);
-    m_selected_file_input_box->setReadOnly(true);
-    m_selected_file_layout->addWidget(m_selected_file_label);
-    m_selected_file_layout->addWidget(m_selected_file_input_box);
-
-    // Custom replay
-    {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto group_box = new QGroupBox();
-        group_box->setTitle("Custom Replay");
-        group_box->setCheckable(true);
-        group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
-
-        m_custom_replay_box = group_box;
-        m_custom_replay_frame_count = frame_count_box;
-
-        m_custom_replay_box->setVisible(m_controller.AdvancedOptionEnabled());
-        QObject::connect(&m_controller,
-                         &ApplicationController::AdvancedOptionToggled,
-                         m_custom_replay_box,
-                         &QGroupBox::setVisible);
-    }
-
-    // Enable Dump Pm4
-    {
-        m_dump_pm4_box = new QCheckBox();
-        m_dump_pm4_box->setText(tr("Enable Dump Pm4"));
-        m_dump_pm4_box->setCheckState(Qt::Unchecked);
-    }
-
-    // Enable perf counter
-    {
-        m_perf_counter_box = new QCheckBox();
-        m_perf_counter_box->setText(tr("Enable Perf Counters"));
-        m_perf_counter_box->setCheckState(Qt::Unchecked);
-        QObject::connect(m_perf_counter_box, &QCheckBox::toggled, this, [this](bool checked) {
-            UpdatePerfCounterElements(checked);
-        });
-        UpdatePerfCounterElements(false);
-    }
-
-    // Enable GPU Time
-    {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto group_box = new QGroupBox();
-        group_box->setTitle("Enable GPU Time");
-        group_box->setCheckable(true);
-        group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
-
-        m_gpu_time_replay_box = group_box;
-        m_gpu_time_replay_frame_count = frame_count_box;
-    }
-
-    // Enable RenderDoc capture
-    {
-        m_renderdoc_capture_box = new QCheckBox();
-        m_renderdoc_capture_box->setText(tr("Enable RenderDoc capture"));
-        m_renderdoc_capture_box->setCheckState(Qt::Unchecked);
-    }
-
-    // Replay Warning
-    m_replay_warning_layout = new QHBoxLayout();
-    m_replay_warning_label = new QLabel(
-    tr("⚠ Initiating replay will use and potentially overwrite temporary artifacts from previous "
-       "replays. Save any desired artifacts manually in a separate folder before proceeding."));
-    m_replay_warning_label->setWordWrap(true);
-    m_replay_warning_layout->addWidget(m_replay_warning_label);
-
-    // Delete replay artifacts
-    m_delete_replay_artifacts_layout = new QHBoxLayout();
-    m_delete_replay_artifacts_button = new QPushButton("&Delete Previous Replay Artifacts", this);
-    m_delete_replay_artifacts_layout->addWidget(m_delete_replay_artifacts_button);
-
-    // Left Panel Layout
-    m_left_panel_layout = new QVBoxLayout();
-    m_left_panel_layout->addWidget(m_metrics_list_label);
-    m_left_panel_layout->addWidget(m_metrics_list);
-
-    // Right Panel Layout
-    m_right_panel_layout = new QVBoxLayout();
-    m_right_panel_layout->addWidget(m_selected_metrics_description_label);
-    m_right_panel_layout->addWidget(m_selected_metrics_description);
-    m_right_panel_layout->addWidget(m_enabled_metrics_list_label);
-    m_right_panel_layout->addWidget(m_enabled_metrics_list);
-    m_right_panel_layout->addLayout(m_device_layout);
-    m_right_panel_layout->addLayout(m_selected_file_layout);
-    m_right_panel_layout->addWidget(m_custom_replay_box);
-    m_right_panel_layout->addWidget(m_dump_pm4_box);
-    m_right_panel_layout->addWidget(m_perf_counter_box);
-    m_right_panel_layout->addWidget(m_gpu_time_replay_box);
-    m_right_panel_layout->addWidget(m_renderdoc_capture_box);
-    m_right_panel_layout->addLayout(m_replay_warning_layout);
-    m_right_panel_layout->addLayout(m_delete_replay_artifacts_layout);
-    m_right_panel_layout->addLayout(m_button_layout);
-
-    // Main Layout
-    m_main_layout = new QHBoxLayout();
-    m_main_layout->addLayout(m_left_panel_layout);
-    m_main_layout->addLayout(m_right_panel_layout);
-
-    m_overlay->Initialize(m_main_layout, this);
-    setLayout(m_overlay->GetLayout());
-
-    // Connect the name list's selection change to a lambda
-    QObject::connect(m_metrics_list,
-                     &QListWidget::currentItemChanged,
-                     [&](QListWidgetItem *current, QListWidgetItem *previous) {
-                         if (current)
-                         {
-                             int index = m_metrics_list->row(current);
-                             if (index >= 0 && index < m_csv_items->size())
-                             {
-                                 m_selected_metrics_description->setText(
-                                 m_csv_items->at(index).description);
-                             }
-                         }
+    QObject::connect(m_perf_counter_elems.m_metrics_list,
+                     &QListWidget::itemChanged,
+                     &m_parent,
+                     [this]() {
+                         m_perf_counter_elems.UpdateEnabledMetrics();
+                         m_perf_counter_elems.PopulateSelectedMetrics(m_config.selected_metrics);
                      });
 
-    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
-        // This code will execute whenever an item's state changes
-        // It will refresh the second list of selected items
-        UpdateSelectedMetricsList();
-    });
+    QObject::connect(m_perf_counter_elems.m_metrics_list,
+                     &QListWidget::currentItemChanged,
+                     &m_parent,
+                     [this](QListWidgetItem* current) {
+                         if (!current)
+                         {
+                             return;
+                         }
+                         auto text = current->data(kMetricDescriptionRole).toString();
+                         m_perf_counter_elems.m_selected_metrics_description->setText(text);
+                     });
+    if (!m_perf_counter_elems.m_available)
+    {
+        m_perf_counter_elems.Hide();
+    }
+}
 
-    QObject::connect(m_device_box,
-                     SIGNAL(currentIndexChanged(const QString &)),
-                     this,
-                     SLOT(OnDeviceSelected(const QString &)));
-    QObject::connect(m_device_refresh_button,
+QHBoxLayout* Impl::CreateReplayButtonLayout()
+{
+    auto* layout = new QHBoxLayout();
+    auto* button = new QPushButton("&Replay", &m_parent);
+    button->setEnabled(false);
+    QObject::connect(&m_parent, &AnalyzeDialog::ReplayEnabled, button, &QPushButton::setEnabled);
+    QObject::connect(button, &QPushButton::clicked, &m_parent, &AnalyzeDialog::OnReplay);
+    layout->addWidget(button);
+    return layout;
+}
+
+QHBoxLayout* Impl::CreateDeviceSelectorLayout()
+{
+    auto* layout = new QHBoxLayout();
+
+    auto* model = new QStandardItemModel();
+    auto* combo_box = new QComboBox(&m_parent);
+    auto* device_refresh_button = new QPushButton("&Refresh", &m_parent);
+
+    combo_box->setCurrentText("Please select a device");
+    combo_box->setModel(model);
+    combo_box->setCurrentIndex(0);
+    layout->addWidget(new QLabel(tr("Devices:"), &m_parent));
+    layout->addWidget(combo_box);
+    layout->addWidget(device_refresh_button);
+
+    QObject::connect(device_refresh_button,
                      &QPushButton::clicked,
-                     this,
+                     &m_parent,
                      &AnalyzeDialog::OnDeviceListRefresh);
-    QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
-    QObject::connect(m_delete_replay_artifacts_button,
+    QObject::connect(combo_box,
+                     qOverload<int>(&QComboBox::currentIndexChanged),
+                     &m_parent,
+                     [this](int index) {
+                         auto item = m_parent.m_device_model->item(index);
+                         if (!item)
+                         {
+                             return;
+                         }
+                         auto serial = item->data(kDeviceSerialRole).toString();
+                         m_async_pending.pending_device_serial = serial.toStdString();
+                         DispatchAsync();
+                     });
+
+    m_parent.m_device_box = combo_box;
+    m_parent.m_device_model = model;
+
+    m_parent.UpdateDeviceList(false);
+    return layout;
+}
+
+QHBoxLayout* Impl::CreateSelectedFileLayout()
+{
+    auto* layout = new QHBoxLayout();
+    auto* selected_file_input_box = new QLineEdit();
+    selected_file_input_box->setReadOnly(true);
+    layout->addWidget(new QLabel("Selected Capture file:"));
+    layout->addWidget(selected_file_input_box);
+    QObject::connect(&m_parent,
+                     &AnalyzeDialog::SelectedFileUpdated,
+                     selected_file_input_box,
+                     [selected_file_input_box](const QString& name) {
+                         selected_file_input_box->setText(name);
+                     });
+    return layout;
+}
+
+QGroupBox* Impl::CreateCustomReplayBox()
+{
+    auto frame_count_layout = new QHBoxLayout();
+    auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+    auto frame_count_box = new QSpinBox(&m_parent);
+    frame_count_box->setRange(1, std::numeric_limits<int>::max());
+    frame_count_box->setValue(kDefaultFrameCount);
+    frame_count_layout->addWidget(frame_count_label);
+    frame_count_layout->addWidget(frame_count_box);
+
+    auto group_box = new QGroupBox();
+    group_box->setTitle("Custom Replay");
+    group_box->setCheckable(true);
+    group_box->setChecked(false);
+    group_box->setLayout(frame_count_layout);
+
+    group_box->setVisible(m_controller.AdvancedOptionEnabled());
+    QObject::connect(&m_controller,
+                     &ApplicationController::AdvancedOptionToggled,
+                     group_box,
+                     &QGroupBox::setVisible);
+    QObject::connect(group_box, &QGroupBox::clicked, &m_parent, [this](bool checked) {
+        m_config.replay_custom = checked;
+    });
+    QObject::connect(frame_count_box, &QSpinBox::valueChanged, &m_parent, [this](int value) {
+        m_config.replay_custom_frame_count = value;
+    });
+    return group_box;
+}
+
+QCheckBox* Impl::CreatePm4ReplayBox()
+{
+    auto* box = new QCheckBox();
+    box->setText(tr("Enable Dump Pm4"));
+    box->setCheckState(Qt::Unchecked);
+    QObject::connect(box, &QCheckBox::clicked, &m_parent, [this](bool checked) {
+        m_config.replay_dump_pm4 = checked;
+    });
+    return box;
+}
+
+QCheckBox* Impl::CreatePerfCounterReplayBox()
+{
+    auto* box = new QCheckBox();
+    box->setText(tr("Enable Perf Counters"));
+    box->setCheckState(Qt::Unchecked);
+    QObject::connect(box, &QCheckBox::toggled, &m_parent, [this](bool checked) {
+        m_perf_counter_elems.SetEnabled(checked);
+    });
+    QObject::connect(box, &QCheckBox::clicked, &m_parent, [this](bool checked) {
+        m_config.replay_perf_counter = checked;
+    });
+    if (m_perf_counter_elems.m_available)
+    {
+        box->setVisible(false);
+    }
+    return box;
+}
+
+QGroupBox* Impl::CreateGpuTimeReplayBox()
+{
+    auto layout = new QHBoxLayout();
+    auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+    auto frame_count_box = new QSpinBox(&m_parent);
+    frame_count_box->setRange(1, std::numeric_limits<int>::max());
+    frame_count_box->setValue(kDefaultFrameCount);
+    layout->addWidget(frame_count_label);
+    layout->addWidget(frame_count_box);
+
+    auto group_box = new QGroupBox();
+    group_box->setTitle("Enable GPU Time");
+    group_box->setCheckable(true);
+    group_box->setChecked(false);
+    group_box->setLayout(layout);
+
+    QObject::connect(group_box, &QGroupBox::clicked, &m_parent, [this](bool checked) {
+        m_config.replay_gpu_time = checked;
+    });
+    QObject::connect(frame_count_box, &QSpinBox::valueChanged, &m_parent, [this](int value) {
+        m_config.replay_gpu_time_frame_count = value;
+    });
+    return group_box;
+}
+
+QCheckBox* Impl::CreateRenderDocReplayBox()
+{
+    auto* box = new QCheckBox();
+    box->setText(tr("Enable RenderDoc capture"));
+    box->setCheckState(Qt::Unchecked);
+    QObject::connect(box, &QCheckBox::clicked, &m_parent, [this](bool checked) {
+        m_config.replay_renderdoc = checked;
+    });
+    return box;
+}
+
+QHBoxLayout* Impl::CreateReplayWarningLayout()
+{
+    auto* layout = new QHBoxLayout();
+    auto* label = new QLabel(
+    tr("⚠ Initiating replay will use and potentially overwrite temporary artifacts from previous "
+       "replays. Save any desired artifacts manually in a separate folder before proceeding."));
+    label->setWordWrap(true);
+    layout->addWidget(label);
+    return layout;
+}
+
+QHBoxLayout* Impl::CreateDeleteReplayArtifactsLayout()
+{
+    auto* layout = new QHBoxLayout();
+    auto* button = new QPushButton("&Delete Previous Replay Artifacts", &m_parent);
+    layout->addWidget(button);
+    QObject::connect(button,
                      &QPushButton::clicked,
-                     this,
+                     &m_parent,
                      &AnalyzeDialog::OnDeleteReplayArtifacts);
+    return layout;
+}
+
+QLayout* Impl::CreateLayout()
+{
+    if (m_overlay)
+    {
+        return m_overlay->GetLayout();
+    }
+
+    m_overlay = new OverlayHelper(&m_parent);
+
+    InitializePerfCounterElements();
+
+    auto* replay_button_layout = CreateReplayButtonLayout();
+    auto* device_layout = CreateDeviceSelectorLayout();
+    auto* selected_file_layout = CreateSelectedFileLayout();
+    auto* custom_replay_box = CreateCustomReplayBox();
+    auto* dump_pm4_box = CreatePm4ReplayBox();
+    auto* perf_counter_box = CreatePerfCounterReplayBox();
+    auto* gpu_time_replay_box = CreateGpuTimeReplayBox();
+    auto* renderdoc_capture_box = CreateRenderDocReplayBox();
+    auto* replay_warning_layout = CreateReplayWarningLayout();
+    auto* delete_replay_artifacts_layout = CreateDeleteReplayArtifactsLayout();
+
+    // Left Panel Layout
+    auto* left_panel_layout = new QVBoxLayout();
+    left_panel_layout->addWidget(m_perf_counter_elems.m_metrics_list_label);
+    left_panel_layout->addWidget(m_perf_counter_elems.m_metrics_list);
+
+    // Right Panel Layout
+    auto* right_panel_layout = new QVBoxLayout();
+    {
+        right_panel_layout->addWidget(m_perf_counter_elems.m_selected_metrics_description_label);
+        right_panel_layout->addWidget(m_perf_counter_elems.m_selected_metrics_description);
+        right_panel_layout->addWidget(m_perf_counter_elems.m_enabled_metrics_list_label);
+        right_panel_layout->addWidget(m_perf_counter_elems.m_enabled_metrics_list);
+        right_panel_layout->addLayout(device_layout);
+        right_panel_layout->addLayout(selected_file_layout);
+        right_panel_layout->addWidget(custom_replay_box);
+        right_panel_layout->addWidget(dump_pm4_box);
+        right_panel_layout->addWidget(perf_counter_box);
+        right_panel_layout->addWidget(gpu_time_replay_box);
+        right_panel_layout->addWidget(renderdoc_capture_box);
+        right_panel_layout->addLayout(replay_warning_layout);
+        right_panel_layout->addLayout(delete_replay_artifacts_layout);
+        right_panel_layout->addLayout(replay_button_layout);
+    }
+
+    // Main Layout
+    auto* main_layout = new QHBoxLayout();
+    main_layout->addLayout(left_panel_layout);
+    main_layout->addLayout(right_panel_layout);
+
+    m_overlay->Initialize(main_layout, &m_parent);
+    return m_overlay->GetLayout();
+}
+
+// =================================================================================================
+// AnalyzeDialog
+// =================================================================================================
+AnalyzeDialog::AnalyzeDialog(ApplicationController&        controller,
+                             const Dive::AvailableMetrics* available_metrics,
+                             QWidget*                      parent) :
+    QDialog(parent),
+    m_impl(Impl{ *this, controller })
+{
+    qDebug() << "AnalyzeDialog created.";
+
+    m_impl->m_perf_counter_elems.m_available_metrics = available_metrics;
+    m_impl->CreateLayout();
+
+    QObject::connect(this, &AnalyzeDialog::DeviceSelected, this, &AnalyzeDialog::OnDeviceSelected);
 
     QObject::connect(this,
                      &AnalyzeDialog::ReplayStatusUpdated,
@@ -280,6 +504,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
     QObject::connect(this, &AnalyzeDialog::DisableOverlay, this, &AnalyzeDialog::OnDisableOverlay);
     QObject::connect(this, &AnalyzeDialog::OverlayMessage, this, &AnalyzeDialog::OnOverlayMessage);
+    QObject::connect(this, &AnalyzeDialog::AsyncFinished, this, &AnalyzeDialog::OnAsyncFinished);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -290,7 +515,7 @@ AnalyzeDialog::~AnalyzeDialog()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnOverlayMessage(const QString &message)
+void AnalyzeDialog::OnOverlayMessage(const QString& message)
 {
     m_overlay->SetMessage(message);
     m_overlay->SetMessageIsTimed();
@@ -302,7 +527,7 @@ void AnalyzeDialog::OnDisableOverlay()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ShowMessage(const std::string &message)
+void AnalyzeDialog::ShowMessage(const std::string& message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
@@ -312,126 +537,97 @@ void AnalyzeDialog::ShowMessage(const std::string &message)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::PopulateMetrics()
+void PerfCounterElements::PopulateMetrics()
 {
-    if (m_available_metrics)
+    if (!m_available_metrics)
     {
-        // Get the list of all available metrics
-        std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
-
-        for (const auto &key : all_keys)
-        {
-            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
-            if (info)
-            {
-                CsvItem item;
-                item.id = info->m_metric_id;
-                item.type = info->m_metric_type;
-                item.key = QString::fromStdString(key);
-                item.name = QString::fromStdString(info->m_name);
-                item.description = QString::fromStdString(info->m_description);
-                m_csv_items->append(item);
-            }
-        }
-
-        // Populate the metrics list
-        for (const auto &item : *m_csv_items)
-        {
-            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
-            csv_item->setData(kDataRole, item.key);
-            csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
-            csv_item->setCheckState(Qt::Unchecked);
-            m_metrics_list->addItem(csv_item);
-        }
-
-        // Add spacer so that all metrics are visible at the end of the list.
-        QListWidgetItem *spacer = new QListWidgetItem();
-        spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-        m_metrics_list->addItem(spacer);
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdatePerfCounterElements(bool show)
-{
-    if (m_metrics_list->count() == 0)
-    {
-        m_perf_counter_box->setVisible(false);
-        m_metrics_list_label->setVisible(false);
-        m_metrics_list->setVisible(false);
-        m_enabled_metrics_list_label->setVisible(false);
-        m_enabled_metrics_list->setVisible(false);
-        m_selected_metrics_description_label->setVisible(false);
-        m_selected_metrics_description->setVisible(false);
-    }
-    m_metrics_list_label->setEnabled(show);
-    m_metrics_list->setEnabled(show);
-    m_enabled_metrics_list_label->setEnabled(show);
-    m_enabled_metrics_list->setEnabled(show);
-    m_selected_metrics_description_label->setEnabled(show);
-    m_selected_metrics_description->setEnabled(show);
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateSelectedMetricsList()
-{
-    // Clear the existing items in the target list
-    m_enabled_metrics_list->clear();
-    m_enabled_metrics_vector->clear();
-
-    // Iterate through the source list to find checked items
-    for (int i = 0; i < m_metrics_list->count(); ++i)
-    {
-        QListWidgetItem *item = m_metrics_list->item(i);
-
-        // If the item is checked, add it to the target list
-        if (item->checkState() == Qt::Checked)
-        {
-            m_enabled_metrics_list->addItem(item->text());
-            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
-        }
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
-{
-    auto cur_list = Dive::GetDeviceManager().ListDevice();
-    qDebug() << "m_device_box->currentIndex() " << m_device_box->currentIndex();
-    if (cur_list == m_devices && isInitialized)
-    {
-        qDebug() << "No changes from the list of the connected devices. ";
         return;
     }
 
-    m_devices = cur_list;
+    for (const auto& key : m_available_metrics->GetAllMetricKeys())
+    {
+        const Dive::MetricInfo* info = m_available_metrics->GetMetricInfo(key);
+        if (!info)
+        {
+            continue;
+        }
+        QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(info->m_name));
+        item->setData(kMetricKeyRole, QString::fromStdString(key));
+        item->setData(kMetricDescriptionRole, QString::fromStdString(info->m_description));
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+        m_metrics_list->addItem(item);
+        m_available = true;
+    }
+
+    // Add spacer so that all metrics are visible at the end of the list.
+    QListWidgetItem* spacer = new QListWidgetItem();
+    spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
+    m_metrics_list->addItem(spacer);
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterElements::Hide()
+{
+    m_metrics_list_label->setVisible(false);
+    m_metrics_list->setVisible(false);
+    m_enabled_metrics_list_label->setVisible(false);
+    m_enabled_metrics_list->setVisible(false);
+    m_selected_metrics_description_label->setVisible(false);
+    m_selected_metrics_description->setVisible(false);
+}
+
+void PerfCounterElements::SetEnabled(bool enabled)
+{
+    m_metrics_list_label->setEnabled(enabled);
+    m_metrics_list->setEnabled(enabled);
+    m_enabled_metrics_list_label->setEnabled(enabled);
+    m_enabled_metrics_list->setEnabled(enabled);
+    m_selected_metrics_description_label->setEnabled(enabled);
+    m_selected_metrics_description->setEnabled(enabled);
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::UpdateDeviceList()
+{
+    auto devices = Dive::GetDeviceManager().ListDevice();
+
+    QString current_serial;
+    if (auto item = m_device_model->item(m_device_box->currentIndex()); item)
+    {
+        current_serial = item->data(kDeviceSerialRole).toString();
+    }
+
     m_device_model->clear();
     // Replay button should only be enabled when a device is selected.
-    m_replay_button->setEnabled(false);
+    ReplayEnabled(false);
 
-    if (m_devices.empty())
+    if (devices.empty())
     {
-        QStandardItem *item = new QStandardItem("No devices found");
+        QStandardItem* item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         m_device_model->appendRow(item);
         m_device_box->setCurrentIndex(0);
     }
     else
     {
-        for (size_t i = 0; i < m_devices.size(); i++)
+        for (size_t i = 0; i < devices.size(); i++)
         {
             if (i == 0)
             {
-                QStandardItem *item = new QStandardItem("Please select a device");
+                QStandardItem* item = new QStandardItem("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
                 m_device_model->appendRow(item);
                 m_device_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+            QStandardItem* item = new QStandardItem(devices[i].GetDisplayName().c_str());
+            auto           serial = QString::fromStdString(devices[i].m_serial);
+            item->setData(serial, kDeviceSerialRole);
             m_device_model->appendRow(item);
+
             // Keep the original selected devices as selected.
-            if (m_cur_device == m_devices[i].m_serial)
+            if (serial == current_serial)
             {
                 m_device_box->setCurrentIndex(static_cast<int>(i));
             }
@@ -440,40 +636,74 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceSelected(const QString &s)
+void Impl::DispatchAsync()
 {
-    if (s.isEmpty() || m_device_box->currentIndex() == 0)
+    if (m_async_active.valid())
     {
-        qDebug() << "No devices selected";
         return;
     }
-    int device_index = m_device_box->currentIndex() - 1;
-    assert(static_cast<size_t>(device_index) < m_devices.size());
+    m_async_executing = AsyncExecuting{
+        .pending_device_serial = m_async_pending.pending_device_serial,
+        .device_selection_error = std::nullopt,
+    };
+    std::async([this]() {
+        ExecuteAsync();
+        emit m_parent.AsyncFinished();
+    });
+}
 
-    qDebug() << "Device selected: " << m_cur_device.c_str() << ", index " << device_index
-             << ", m_devices[device_index].m_serial " << m_devices[device_index].m_serial.c_str();
-    if (m_cur_device == m_devices[device_index].m_serial)
+void Impl::ExecuteAsync()
+{
+    auto& state = m_async_executing;
+    if (state.pending_device_serial)
     {
-        // Enable the replay button as soon as a device is selected.
-        m_replay_button->setEnabled(true);
+        ExecuteAsyncSelectDevice();
+    }
+}
+
+void Impl::ExecuteAsyncSelectDevice()
+{
+    auto& state = m_async_executing;
+    auto serial = *state.pending_device_serial;
+    if (serial.empty())
+    {
+        // Succeed by default.
         return;
     }
 
-    m_cur_device = m_devices[device_index].m_serial;
-    auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_device);
+    auto dev_ret = Dive::GetDeviceManager().SelectDevice(serial);
     if (!dev_ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ",
-                                           m_cur_device.c_str(),
-                                           ", error: ",
-                                           dev_ret.status().message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(err_msg);
-        OnDeviceListRefresh();
+        state.device_selection_error = absl::StrCat("Failed to select device ",
+                                                    serial.c_str(),
+                                                    ", error: ",
+                                                    dev_ret.status().message());
+        qDebug() << state.device_selection_error->c_str();
         return;
     }
+}
 
-    m_replay_button->setEnabled(true);
+void Impl::OnAsyncFinished()
+{
+    m_async_active.get();
+    auto& state = m_async_executing;
+    if (state.pending_device_serial)
+    {
+        if (state.device_selection_error)
+        {
+            m_parent.m_device_box->setCurrentIndex(0);
+            m_parent.ShowMessage(*state.device_selection_error);
+        }
+        else
+        {
+            m_config.device_serial = *state.pending_device_serial;
+        }
+    }
+}
+
+void AnalyzeDialog::OnAsyncFinished()
+{
+    m_impl->OnAsyncFinished();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -483,7 +713,7 @@ void AnalyzeDialog::OnDeviceListRefresh()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
+void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
 {
     // Clear members for previous session
     OnAnalyzeCaptureEnded();
@@ -531,10 +761,10 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
     assert(local_gfxr_parse == component_paths.gfxr);
     m_selected_capture_file_string = QString::fromStdString(component_paths.gfxr.generic_string());
     m_local_capture_file_directory = local_gfxr_parse.parent_path();
-    m_local_capture_files = component_paths;
+    m_impl->m_local_capture_files = component_paths;
 
     // Update display and settings
-    m_selected_file_input_box->setText(m_selected_capture_file_string);
+    SelectedFileUpdated(m_selected_capture_file_string);
     QString last_file_path = QString::fromStdString(
     local_gfxr_parse.parent_path().generic_string());
     Settings::Get()->WriteLastFilePath(last_file_path);
@@ -549,13 +779,13 @@ void AnalyzeDialog::OnAnalyzeCaptureEnded()
     // Clear members for current analyze session
     m_selected_capture_file_string = "";
     m_local_capture_file_directory = "";
-    m_local_capture_files = {};
+    m_impl->m_local_capture_files = {};
 }
 
 //--------------------------------------------------------------------------------------------------
 absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
-Dive::AndroidDevice *device,
-const std::string   &local_asset_file_path)
+Dive::AndroidDevice* device,
+const std::string&   local_asset_file_path)
 {
     const std::string remote_dir = "/sdcard/gfxr_captures_for_replay";
 
@@ -580,15 +810,15 @@ const std::string   &local_asset_file_path)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
+void AnalyzeDialog::SetReplayButton(const std::string& message, bool is_enabled)
 {
-    m_replay_button->setEnabled(is_enabled);
-    m_replay_button->setText(message.c_str());
+    ReplayEnabled(is_enabled);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
-                                         const std::string   &remote_gfxr_file)
+absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager& device_manager,
+                                         const std::string&   remote_gfxr_file,
+                                         int                  frame_count)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -597,14 +827,14 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_custom_replay_frame_count->value();
+    replay_settings.loop_single_frame_count = frame_count;
 
     return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
-                                      const std::string   &remote_gfxr_file)
+absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager& device_manager,
+                                      const std::string&   remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
     Dive::GfxrReplaySettings replay_settings;
@@ -616,8 +846,9 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manager,
-                                              const std::string   &remote_gfxr_file)
+absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager&            device_manager,
+                                              const std::string&              remote_gfxr_file,
+                                              const std::vector<std::string>& selected_metrics)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -626,14 +857,15 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
 
     // Variant-specific config
-    replay_settings.metrics = *m_enabled_metrics_vector;
+    replay_settings.metrics = selected_metrics;
 
     return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
-                                          const std::string   &remote_gfxr_file)
+absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager& device_manager,
+                                          const std::string&   remote_gfxr_file,
+                                          int                  frame_count)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -642,14 +874,14 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_gpu_time_replay_frame_count->value();
+    replay_settings.loop_single_frame_count = frame_count;
 
     return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
-                                            const std::string   &remote_gfxr_file)
+absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager& device_manager,
+                                            const std::string&   remote_gfxr_file)
 {
     SetReplayButton("Replaying with RenderDoc...", false);
     Dive::GfxrReplaySettings replay_settings;
@@ -664,6 +896,7 @@ absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
+
 void AnalyzeDialog::OnReplay()
 {
     if (m_replay_active.valid())
@@ -672,28 +905,23 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Get info on which variants of replay to initiate runs for
-    ReplayConfig config = {
-        .replay_dump_pm4 = m_dump_pm4_box->isChecked(),
-        .replay_gpu_time = m_gpu_time_replay_box->isChecked(),
-        .replay_renderdoc = m_renderdoc_capture_box->isChecked(),
-        .replay_perf_counter = m_perf_counter_box->isChecked() &&
-                               !m_enabled_metrics_vector->empty(),
-        .replay_custom = m_custom_replay_box->isVisible() && m_custom_replay_box->isChecked(),
-    };
-    bool any_selected = config.replay_dump_pm4 || config.replay_gpu_time ||
-                        config.replay_renderdoc || config.replay_perf_counter ||
-                        config.replay_custom;
+    const ReplayConfig& config = m_impl->m_config;
+    const bool          any_selected = config.replay_dump_pm4 || config.replay_gpu_time ||
+                              config.replay_renderdoc || config.replay_perf_counter ||
+                              config.replay_custom;
     if (!any_selected)
     {
-        if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
-        {
-            return ShowMessage("Select at least one metrics.");
-        }
+
         return ShowMessage("Select at least one option.");
     }
+    if (config.replay_perf_counter && config.selected_metrics.empty())
+    {
+        return ShowMessage("Select at least one metrics.");
+    }
+
     OverlayMessage("Replaying...");
 
-    m_replay_active = std::async([=, this]() {
+    m_replay_active = std::async([this, config = config]() {
         ReplayImpl(config);
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -715,7 +943,7 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &message)
+void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString& message)
 {
     // Cast from qt known type.
     auto status_code = static_cast<ReplayStatusUpdateCode>(status_code_int);
@@ -746,12 +974,12 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             break;
         case ReplayStatusUpdateCode::kSuccess:
             ShowMessage(item.message.toStdString());
-            SetReplayButton(kDefaultReplayButtonText, true);
+            SetReplayButton("", true);
             OverlayMessage("Replay done.");
             break;
         case ReplayStatusUpdateCode::kFailure:
             ShowMessage(item.message.toStdString());
-            SetReplayButton(kDefaultReplayButtonText, true);
+            SetReplayButton("", true);
             OverlayMessage("Replay failed.");
             break;
         case ReplayStatusUpdateCode::kSetup:
@@ -760,7 +988,7 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             break;
         case ReplayStatusUpdateCode::kSetupDeviceFailure:
             ShowMessage(item.message.toStdString());
-            SetReplayButton(kDefaultReplayButtonText, false);
+            SetReplayButton("", false);
             OnDeviceListRefresh();
             break;
         case ReplayStatusUpdateCode::kStartNormalReplay:
@@ -787,17 +1015,18 @@ void AnalyzeDialog::ExecuteStatusUpdate()
     m_status_update_queue.clear();
 }
 
-void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &message)
+void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string& message)
 {
     qDebug() << message.c_str();
     ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(message));
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
+void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
 {
-    Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
-    auto                 device = device_manager.GetDevice();
+    Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
+
+    auto device = device_manager.GetDevice();
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);
 
@@ -812,7 +1041,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
 
     // Get the asset file name
     absl::StatusOr<std::string>
-    remote_file = PushFilesToDevice(device, m_local_capture_files.gfxa.generic_string());
+    remote_file = PushFilesToDevice(device, m_impl->m_local_capture_files.gfxa.generic_string());
     if (!remote_file.ok())
     {
         std::string err_msg = absl::StrCat("Failed to deploy replay apk: ",
@@ -822,7 +1051,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     }
 
     // Deploying install/gfxr-replay.apk
-    ret = device_manager.DeployReplayApk(m_cur_device);
+    ret = device_manager.DeployReplayApk(config.device_serial);
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to push files to device: ", ret.message());
@@ -833,7 +1062,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     // Run only replay with default settings
     if (config.replay_custom)
     {
-        ret = NormalReplay(device_manager, remote_file.value());
+        ret = NormalReplay(device_manager, remote_file.value(), config.replay_custom_frame_count);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run custom replay: ", ret.message());
@@ -867,7 +1096,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     // Run the perf counter replay
     if (config.replay_perf_counter)
     {
-        ret = PerfCounterReplay(device_manager, remote_file.value());
+        ret = PerfCounterReplay(device_manager, remote_file.value(), config.selected_metrics);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run perf counter replay: ",
@@ -878,12 +1107,12 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     }
 
     // File could exist from previous runs
-    if (std::filesystem::exists(m_local_capture_files.perf_counter_csv))
+    if (std::filesystem::exists(m_impl->m_local_capture_files.perf_counter_csv))
     {
         qDebug() << "Loading perf counter data: "
-                 << m_local_capture_files.perf_counter_csv.string().c_str();
+                 << m_impl->m_local_capture_files.perf_counter_csv.string().c_str();
         emit DisplayPerfCounterResults(
-        QString::fromStdString(m_local_capture_files.perf_counter_csv.string()));
+        QString::fromStdString(m_impl->m_local_capture_files.perf_counter_csv.string()));
     }
     else
     {
@@ -894,7 +1123,9 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     // Run the gpu_time replay
     if (config.replay_gpu_time)
     {
-        ret = GpuTimeReplay(device_manager, remote_file.value());
+        ret = GpuTimeReplay(device_manager,
+                            remote_file.value(),
+                            config.replay_gpu_time_frame_count);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run gpu_time replay: ", ret.message());
@@ -904,12 +1135,12 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
     }
 
     // File could exist from previous runs
-    if (std::filesystem::exists(m_local_capture_files.gpu_timing_csv))
+    if (std::filesystem::exists(m_impl->m_local_capture_files.gpu_timing_csv))
     {
         qDebug() << "Loading gpu timing data: "
-                 << m_local_capture_files.gpu_timing_csv.string().c_str();
+                 << m_impl->m_local_capture_files.gpu_timing_csv.string().c_str();
         emit DisplayGpuTimingResults(
-        QString::fromStdString(m_local_capture_files.gpu_timing_csv.string()));
+        QString::fromStdString(m_impl->m_local_capture_files.gpu_timing_csv.string()));
     }
     else
     {
@@ -928,7 +1159,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
             return;
         }
         qDebug() << "RenderDoc capture saved to: "
-                 << m_local_capture_files.renderdoc_rdc.string().c_str();
+                 << m_impl->m_local_capture_files.renderdoc_rdc.string().c_str();
     }
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess, "Replay completed successfully.");
@@ -940,7 +1171,7 @@ void AnalyzeDialog::DeleteReplayArtifactsImpl()
     qDebug() << "Attempting to delete replay artifacts from previous runs...";
     UpdateReplayStatus(ReplayStatusUpdateCode::kDeletingReplayArtifacts);
 
-    AttemptDeletingTemporaryLocalFile(m_local_capture_files.perf_counter_csv);
-    AttemptDeletingTemporaryLocalFile(m_local_capture_files.gpu_timing_csv);
-    AttemptDeletingTemporaryLocalFile(m_local_capture_files.pm4_rd);
+    AttemptDeletingTemporaryLocalFile(m_impl->m_local_capture_files.perf_counter_csv);
+    AttemptDeletingTemporaryLocalFile(m_impl->m_local_capture_files.gpu_timing_csv);
+    AttemptDeletingTemporaryLocalFile(m_impl->m_local_capture_files.pm4_rd);
 }
