@@ -13,6 +13,7 @@ Checks:
   - "-bugprone-throwing-static-initialization" # ABSL_FLAG
   - "-cppcoreguidelines-avoid-non-const-global-variables" # ABSL_FLAG
   - "-cppcoreguidelines-use-enum-class"
+  - "-readability-uppercase-literal-suffix"
   - "-readability-redundant-access-specifiers" # qt
 
 CheckOptions:
