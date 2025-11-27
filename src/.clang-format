@@ -1,10 +1,29 @@
 ---
 
-BasedOnStyle: InheritParentConfig
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 100
 
 ---
 
 Language: Cpp
 
-SortIncludes: CaseSensitive
-IncludeBlocks: Regroup
+# Google C++ Style
+# Modifier indent = 1 = 4 + (-3)
+AccessModifierOffset: -3
+
+# Dive braces style:
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyRecord: false
+BreakBeforeBraces: Custom
