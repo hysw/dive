@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "android_application.h"
 #include "command_utils.h"
 #include "constants.h"
@@ -163,6 +164,7 @@ public:
     AdbSession       &Adb() { return m_adb; }
     int               Port() const { return m_port; }
     bool              IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
+    const std::string GetSerial() const { return m_serial; }
 
     AndroidApplication *GetCurrentApplication() { return m_app.get(); }
 
@@ -194,23 +196,21 @@ private:
     int                                 m_port = kFirstPort;
 };
 
-class DeviceManager
+class ReplayRunner
 {
 public:
-    DeviceManager() = default;
-    DeviceManager &operator=(const DeviceManager &) = delete;
-    DeviceManager(const DeviceManager &) = delete;
-
-    std::vector<DeviceInfo>         ListDevice() const;
-    absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
-    void                            RemoveDevice() { m_device = nullptr; }
-    AndroidDevice                  *GetDevice() const { return m_device.get(); }
+    explicit ReplayRunner(const std::shared_ptr<AndroidDevice> &device) :
+        m_device(device)
+    {
+    }
 
     // Exposing for user-initiated cleanup
     absl::Status CleanupPackageProperties(const std::string &package);
 
-    absl::Status DeployReplayApk(const std::string &serial);
+    absl::Status DeployReplayApk();
     absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
+
+    AndroidDevice *GetDevice() const { return m_device.get(); }
 
 private:
     // Initiates GFXR replay through the GFXR-provided python script, blocking call
@@ -218,7 +218,84 @@ private:
     // Initiates GFXR replay through the profiling plugin, blocking call
     absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
 
-    std::unique_ptr<AndroidDevice> m_device{ nullptr };
+    std::shared_ptr<AndroidDevice> m_device{ nullptr };
+};
+
+class AndroidDeviceEntry
+{
+public:
+    std::shared_ptr<AndroidDevice> Get() const
+    {
+        absl::MutexLock lock(&m_mutex);
+        return m_device;
+    }
+
+    absl::Status EnsureInit(const std::string &serial)
+    {
+        absl::MutexLock lock(&m_mutex);
+        if (m_device)
+        {
+            return absl::OkStatus();
+        }
+        auto device = std::make_shared<AndroidDevice>(serial);
+        if (auto res = m_device->Init(); !res.ok())
+        {
+            return res;
+        }
+        m_device = device;
+        return absl::OkStatus();
+    }
+
+    void Clear()
+    {
+        absl::MutexLock lock(&m_mutex);
+        m_device = nullptr;
+    }
+
+private:
+    mutable absl::Mutex m_mutex;
+
+    std::shared_ptr<AndroidDevice> m_device ABSL_GUARDED_BY(m_mutex);
+};
+
+// The device will live until we cleanup all the devices.
+class AndroidDeviceLease
+{
+public:
+    AndroidDeviceLease() = default;
+    explicit AndroidDeviceLease(const std::shared_ptr<AndroidDeviceEntry> &device) :
+        m_device(device)
+    {
+    }
+
+    std::shared_ptr<AndroidDevice> Get() const { return m_device ? m_device->Get() : nullptr; };
+
+    ReplayRunner GetReplayRunner() const { return ReplayRunner(Get()); }
+
+private:
+    std::shared_ptr<AndroidDeviceEntry> m_device;
+};
+
+class DeviceManager
+{
+public:
+    DeviceManager() = default;
+    DeviceManager &operator=(const DeviceManager &) = delete;
+    DeviceManager(const DeviceManager &) = delete;
+
+    std::vector<DeviceInfo> ListDevice() const;
+
+    absl::StatusOr<AndroidDeviceLease> GetDevice(const std::string &serial);
+
+    void RemoveAllDevices();
+
+private:
+    mutable absl::Mutex m_mutex;
+    std::unordered_map<std::string, std::weak_ptr<AndroidDeviceEntry>> m_devices
+    ABSL_GUARDED_BY(m_mutex);
+
+    std::shared_ptr<AndroidDeviceEntry> GetLease(const std::string &serial)
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
 };
 
 std::filesystem::path ResolveAndroidLibPath(const std::string &name,

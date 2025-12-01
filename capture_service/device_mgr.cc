@@ -871,30 +871,60 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
     return dev_list;
 }
 
-absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &serial)
+absl::StatusOr<AndroidDeviceLease> DeviceManager::GetDevice(const std::string &serial)
 {
     if (serial.empty())
     {
         return absl::InvalidArgumentError("Device Serial is empty");
     }
-
-    m_device = std::make_unique<AndroidDevice>(serial);
-    if (!m_device)
+    auto lease = GetLease(serial);
+    DIVE_ASSERT(lease);
+    if (auto res = lease->EnsureInit(serial); !res.ok())
     {
-        return absl::UnavailableError("Failed to allocate memory for AndroidDevice");
+        return res;
     }
-
-    absl::Status status = m_device->Init();
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    return m_device.get();
+    return AndroidDeviceLease(lease);
 }
 
-absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
+std::shared_ptr<AndroidDeviceEntry> DeviceManager::GetLease(const std::string &serial)
 {
+    if (serial.empty())
+    {
+        return nullptr;
+    }
+    std::shared_ptr<AndroidDeviceEntry> lease;
+    if (auto iter = m_devices.find(serial); iter != m_devices.end())
+    {
+        lease = iter->second.lock();
+    }
+    if (!lease)
+    {
+        lease = std::make_shared<AndroidDeviceEntry>();
+        m_devices[serial] = lease;
+    }
+    return lease;
+}
+
+void DeviceManager::RemoveAllDevices()
+{
+    absl::MutexLock lock(&m_mutex);
+
+    for (auto entry : m_devices)
+    {
+        if (auto lease = entry.second.lock())
+        {
+            lease->Clear();
+        }
+    }
+    m_devices.clear();
+}
+
+absl::Status ReplayRunner::DeployReplayApk()
+{
+    if (!m_device)
+    {
+        return absl::FailedPreconditionError("Device not found.");
+    }
     const AdbSession &adb = m_device->Adb();
 
     LOGD("DeployReplayApk(): starting\n");
@@ -927,7 +957,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
                                       python_path,
                                       recon_py_path,
                                       replay_apk_path,
-                                      serial);
+                                      m_device->GetSerial());
     absl::StatusOr<std::string> res = RunCommand(cmd);
     if (!res.ok())
     {
@@ -948,8 +978,12 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
+absl::Status ReplayRunner::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
+    if (!m_device)
+    {
+        return absl::FailedPreconditionError("Device not found.");
+    }
     const AdbSession &adb = m_device->Adb();
 
     absl::Cleanup cleanup([&]() {
@@ -1120,8 +1154,12 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
+absl::Status ReplayRunner::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
 {
+    if (!m_device)
+    {
+        return absl::FailedPreconditionError("Device not found.");
+    }
     const AdbSession &adb = m_device->Adb();
 
     LOGD("RunReplayProfilingBinary(): SETUP\n");
@@ -1194,8 +1232,12 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
+absl::Status ReplayRunner::RunReplayApk(const GfxrReplaySettings &settings) const
 {
+    if (!m_device)
+    {
+        return absl::FailedPreconditionError("Device not found.");
+    }
     const AdbSession &adb = m_device->Adb();
 
     LOGD("RunReplayApk(): Check settings before run\n");
@@ -1275,14 +1317,18 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
+absl::Status ReplayRunner::CleanupPackageProperties(const std::string &package)
 {
+    if (!m_device)
+    {
+        return absl::FailedPreconditionError("Device not found.");
+    }
     if (package.empty())
     {
         return absl::FailedPreconditionError(
         "Cannot clean package properties of unspecified package");
     }
-    if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
+    if (absl::Status ret = m_device->CleanupPackageProperties(package); !ret.ok())
     {
         return ret;
     }

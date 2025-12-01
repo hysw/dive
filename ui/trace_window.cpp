@@ -65,6 +65,12 @@ constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(Dive::kAppTypeInfos.beg
                                                          });
 const int        kGfxrCaptureButtonId = 1;
 const int        kPm4CaptureButtonId = 2;
+
+Dive::AndroidDevice *GetDefaultDevice()
+{
+    // Dive::GetDeviceManager().GetDevice(...);
+    return nullptr;
+}
 }  // namespace
 
 // =================================================================================================
@@ -304,7 +310,7 @@ void TraceDialog::ShowErrorMessage(const QString &err_msg)
 
 absl::Status TraceDialog::StopPackageAndCleanup()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
     if (device == nullptr)
     {
         return absl::OkStatus();
@@ -325,7 +331,7 @@ absl::Status TraceDialog::StopPackageAndCleanup()
         }
         // Only delete the on device capture directory when the application is closed.
         std::string
-             on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
+        on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
                                                    "/",
                                                    m_gfxr_capture_file_directory_input_box->text()
                                                    .toStdString());
@@ -651,7 +657,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
 void TraceDialog::OnStartClicked()
 {
     qDebug() << "Command: " << m_cmd_input_box->text();
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
     if (!device)
     {
         std::string
@@ -749,7 +755,7 @@ void ProgressBarWorker::run()
 
 void TraceWorker::run()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
     if (device == nullptr)
     {
         qDebug() << "Failed to connect to device";
@@ -1018,7 +1024,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
 
 void GfxrCaptureWorker::run()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
     if (device == nullptr)
     {
         qDebug() << "Failed to connect to device";
@@ -1156,7 +1162,7 @@ void TraceDialog::OnAppListRefresh()
 
 void TraceDialog::UpdatePackageList()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
     if (device == nullptr)
     {
         return;
@@ -1251,7 +1257,7 @@ void TraceDialog::EnableCaptureTypeButtons(bool enable)
 
 void TraceDialog::OnGfxrCaptureClicked()
 {
-    auto         device = Dive::GetDeviceManager().GetDevice();
+    auto         device = GetDefaultDevice();
     absl::Status ret;
     if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture)
     {
@@ -1306,7 +1312,7 @@ void TraceDialog::OnGfxrCaptureClicked()
 
 void TraceDialog::RetrieveGfxrCapture()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    auto device = GetDefaultDevice();
 
     if (device == nullptr)
     {

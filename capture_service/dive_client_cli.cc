@@ -59,6 +59,8 @@ struct CommandContext
 {
     Dive::DeviceManager& mgr;
     const GlobalOptions& options;
+
+    std::shared_ptr<Dive::AndroidDevice> device;
 };
 
 enum class Command
@@ -305,7 +307,7 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
 // Internal helper to run a package on the device.
 absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
 {
-    auto* device = ctx.mgr.GetDevice();
+    auto* device = ctx.device.get();
     if (device == nullptr)
     {
         return absl::FailedPreconditionError(
@@ -370,16 +372,16 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
 }
 
 // Triggers a capture on the device and downloads the resulting file.
-absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& download_dir)
+absl::Status TriggerPm4Capture(Dive::AndroidDevice* device, const std::string& download_dir)
 {
-    if (mgr.GetDevice() == nullptr)
+    if (device == nullptr)
     {
         return absl::FailedPreconditionError("No device selected, can't capture.");
     }
 
     Network::TcpClient client;
     const std::string  host = "127.0.0.1";
-    int                port = mgr.GetDevice()->Port();
+    int                port = device->Port();
 
     absl::Status status = client.Connect(host, port);
     if (!status.ok())
@@ -414,13 +416,14 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
 }
 
 // Checks if the capture directory on the device is currently done.
-absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
+absl::Status IsCaptureFinished(Dive::AndroidDevice* device,
+                               const std::string&   gfxr_capture_directory)
 {
     std::string                 on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                           "/",
-                                                           gfxr_capture_directory);
+                                                                           "/",
+                                                                           gfxr_capture_directory);
     std::string                 command = "shell lsof " + on_device_capture_directory;
-    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    absl::StatusOr<std::string> output = device->Adb().RunAndGetResult(command);
 
     if (!output.ok())
     {
@@ -497,7 +500,7 @@ const std::vector<std::string>& file_list)
 }
 
 // Retrieves a GFXR capture from the device and downloads it.
-absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& options)
+absl::Status RetrieveGfxrCapture(Dive::AndroidDevice* device, const GlobalOptions& options)
 {
     const std::string&    gfxr_capture_directory = options.gfxr_capture_file_dir;
     std::filesystem::path download_dir = options.download_dir;
@@ -511,7 +514,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 
     // Retrieve the list of files in the capture directory on the device.
     std::string command = absl::StrFormat("shell ls %s", on_device_capture_directory);
-    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    absl::StatusOr<std::string> output = device->Adb().RunAndGetResult(command);
     if (!output.ok())
     {
         return absl::InternalError("Error getting capture_file name: " +
@@ -545,7 +548,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
     command = absl::StrFormat(R"(pull "%s" "%s")",
                               on_device_capture_directory,
                               full_target_download_dir.string());
-    output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    output = device->Adb().RunAndGetResult(command);
     if (!output.ok())
     {
         return absl::InternalError("Error pulling files: " +
@@ -570,7 +573,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 }
 
 // Triggers a GFXR capture on the device, allowing for multiple captures and screenshot.
-absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& options)
+absl::Status TriggerGfxrCapture(Dive::AndroidDevice* device, const GlobalOptions& options)
 {
     std::cout
     << "Press key g+enter to trigger a capture and g+enter again to retrieve the capture. Press "
@@ -590,7 +593,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
         {
             if (is_capturing)
             {
-                while (!IsCaptureFinished(mgr, gfxr_capture_directory).ok())
+                while (!IsCaptureFinished(device, gfxr_capture_directory).ok())
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     std::cout << "GFXR capture in progress, please wait for current capture to "
@@ -598,7 +601,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
                               << std::endl;
                 }
 
-                ret = mgr.GetDevice()->Adb().Run(
+                ret = device->Adb().Run(
                 "shell setprop debug.gfxrecon.capture_android_trigger false");
                 if (!ret.ok())
                 {
@@ -608,7 +611,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
 
                 // Retrieve the capture. If this fails, we print an error but don't exit the tool,
                 // allowing the user to try again.
-                absl::Status retrieve_status = RetrieveGfxrCapture(mgr, options);
+                absl::Status retrieve_status = RetrieveGfxrCapture(device, options);
                 if (!retrieve_status.ok())
                 {
                     std::cout << "Failed to retrieve capture: " << retrieve_status.message()
@@ -622,7 +625,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
             }
             else
             {
-                ret = mgr.GetDevice()->Adb().Run(
+                ret = device->Adb().Run(
                 "shell setprop debug.gfxrecon.capture_android_trigger true");
                 if (!ret.ok())
                 {
@@ -631,7 +634,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
                 }
 
                 std::filesystem::path gfxr_capture_directory_path(gfxr_capture_directory);
-                ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory_path);
+                ret = device->TriggerScreenCapture(gfxr_capture_directory_path);
                 if (!ret.ok())
                 {
                     return absl::InternalError("Error creating capture screenshot: " +
@@ -662,8 +665,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
     std::string on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
                                                            "/",
                                                            gfxr_capture_directory);
-    ret = mgr.GetDevice()->Adb().Run(
-    absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+    ret = device->Adb().Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 
     return absl::OkStatus();
 }
@@ -686,7 +688,7 @@ absl::Status CmdListDevice(const CommandContext& ctx)
 
 absl::Status CmdListPackage(const CommandContext& ctx)
 {
-    auto* device = ctx.mgr.GetDevice();
+    auto* device = ctx.device.get();
     auto  ret = device->ListPackage();
     if (!ret.ok())
     {
@@ -721,7 +723,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     std::cout << "Waiting " << ctx.options.trigger_capture_after << " seconds...\n";
     std::this_thread::sleep_for(std::chrono::seconds(ctx.options.trigger_capture_after));
 
-    status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
+    status = TriggerPm4Capture(ctx.device.get(), ctx.options.download_dir);
     if (!status.ok())
     {
         return status;
@@ -736,18 +738,19 @@ absl::Status CmdGfxrCapture(const CommandContext& ctx)
     {
         return status;
     }
-    return TriggerGfxrCapture(ctx.mgr, ctx.options);
+    return TriggerGfxrCapture(ctx.device.get(), ctx.options);
 }
 
 absl::Status CmdGfxrReplay(const CommandContext& ctx)
 {
-    absl::Status status = ctx.mgr.DeployReplayApk(ctx.options.serial);
+    auto         runner = ctx.mgr.GetReplayRunner(ctx.options.serial);
+    absl::Status status = runner.DeployReplayApk();
     if (!status.ok())
     {
         return absl::InternalError("Failed to deploy replay apk: " + std::string(status.message()));
     }
 
-    status = ctx.mgr.RunReplayApk(ctx.options.replay_settings);
+    status = runner.RunReplayApk(ctx.options.replay_settings);
     if (!status.ok())
     {
         return absl::InternalError("Failed to run replay apk: " + std::string(status.message()));
@@ -757,7 +760,8 @@ absl::Status CmdGfxrReplay(const CommandContext& ctx)
 
 absl::Status CmdCleanup(const CommandContext& ctx)
 {
-    return ctx.mgr.CleanupPackageProperties(ctx.options.package);
+    auto runner = ctx.mgr.GetReplayRunner(ctx.options.serial);
+    return runner.CleanupPackageProperties(ctx.options.package);
 }
 
 }  // namespace
@@ -1015,7 +1019,7 @@ int main(int argc, char** argv)
         }
     }
 
-    CommandContext ctx{ .mgr = mgr, .options = opts };
+    CommandContext ctx{ .mgr = mgr, .options = opts, .device = mgr.GetDevice(opts.serial) };
     absl::Status   ret = selected_def->executor(ctx);
     if (!ret.ok())
     {

@@ -107,16 +107,11 @@ private:
     void                        UpdatePerfCounterElements(bool show);
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
-    absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
-                                             const std::string   &remote_gfxr_file);
-    absl::Status                Pm4Replay(Dive::DeviceManager &device_manager,
-                                          const std::string   &remote_gfxr_file);
-    absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,
-                                                  const std::string   &remote_gfxr_file);
-    absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
-                                              const std::string   &remote_gfxr_file);
-    absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
-                                                const std::string   &remote_gfxr_file);
+    absl::Status NormalReplay(Dive::ReplayRunner &runner, const std::string &remote_gfxr_file);
+    absl::Status Pm4Replay(Dive::ReplayRunner &runner, const std::string &remote_gfxr_file);
+    absl::Status PerfCounterReplay(Dive::ReplayRunner &runner, const std::string &remote_gfxr_file);
+    absl::Status GpuTimeReplay(Dive::ReplayRunner &runner, const std::string &remote_gfxr_file);
+    absl::Status RenderDocReplay(Dive::ReplayRunner &runner, const std::string &remote_gfxr_file);
 
     void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &message = "");
     void ExecuteStatusUpdate();
