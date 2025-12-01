@@ -35,6 +35,8 @@
 //   auto* label = NewWidgetLayout{layout}.New<QLabel>(tr("text"));
 //
 
+// TODO(#602)
+
 template<typename LayoutT>
 class LayoutHelper
 {
@@ -45,6 +47,8 @@ public:
         m_layout(layout)
     {
     }
+
+    LayoutT* absl_nonnull Get() const { return m_layout; }
 
     template<typename T, typename... Args>  //
     T* absl_nonnull NewWidget(Args&&... args)
