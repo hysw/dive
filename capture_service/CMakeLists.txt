@@ -53,7 +53,7 @@ endif()
 target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(
     service
-    PRIVATE network absl::flags absl::flags_parse trace_mgr
+    PRIVATE network absl::log absl::flags absl::flags_parse trace_mgr
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
@@ -77,6 +77,7 @@ else()
     target_link_libraries(
         device_mgr
         dive_legacy_includes
+        absl::log
         absl::cleanup
         absl::flags
         absl::flags_parse

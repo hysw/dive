@@ -19,11 +19,12 @@ limitations under the License.
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "absl/log/absl_log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
-#include "common/log.h"
+// #include "common/log.h"
 
 #if defined(__APPLE__)
 #    include <mach-o/dyld.h>
@@ -34,14 +35,15 @@ limitations under the License.
 
 namespace Dive
 {
-
 absl::StatusOr<std::string> LogCommand(const std::string &command,
                                        const std::string &output,
                                        int                ret)
 {
     // Always log command and output for debug builds
-    LOGD("> %s\n", command.c_str());
-    LOGD("%s\n", output.c_str());
+    ABSL_LOG(INFO) << "> " << command.c_str();
+    ABSL_LOG(INFO) << "  " << output.c_str();
+    // LOGD("> %s\n", command.c_str());
+    // LOGD("%s\n", output.c_str());
 
     if (ret != 0)
     {
@@ -50,7 +52,7 @@ absl::StatusOr<std::string> LogCommand(const std::string &command,
                                        ret,
                                        output);
         // Always log error
-        LOGE("ERROR: %s\n", err_msg.c_str());
+        // LOGE("ERROR: %s\n", err_msg.c_str());
         return absl::UnknownError(err_msg);
     }
     return output;
@@ -65,7 +67,7 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
     if (!pipe)
     {
         err_msg = "Popen call failed\n";
-        LOGE("%s\n", err_msg.c_str());
+        // LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
 

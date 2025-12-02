@@ -79,6 +79,12 @@ target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
 target_link_libraries(
     ${PROJECT_NAME}
+    absl::log
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,absl::log_flags>"
+    absl::log_initialize
+    absl::status
+    absl::flags
+    absl::flags_parse
     absl::failure_signal_handler
     absl::span
     absl::symbolize

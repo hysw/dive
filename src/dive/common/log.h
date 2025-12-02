@@ -16,6 +16,14 @@ limitations under the License.
 
 #pragma once
 
+#ifdef LOG
+#error "Multiple log library included."
+#endif
+
+#ifdef ABSL_LOG
+#error "Multiple log library included."
+#endif
+
 #if defined __ANDROID__
 #    include <android/log.h>
 #    define TAG "Dive"

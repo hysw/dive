@@ -96,6 +96,8 @@
 #include "ui/text_file_view.h"
 #include "ui/trace_window.h"
 
+#include "absl/log/log.h"
+
 namespace
 {
 constexpr int kMessageTimeoutMs = 2500;
@@ -224,6 +226,7 @@ void SetTabAvailable(QTabWidget *widget, int index, bool available)
 MainWindow::MainWindow(ApplicationController &controller) :
     m_controller(controller)
 {
+    LOG(INFO) << "MainWindow()";
     controller.Register(*this);
 
     // Output logs to both the "record" as well as console output

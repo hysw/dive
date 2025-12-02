@@ -34,6 +34,11 @@
 #include "custom_metatypes.h"
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
+#include "absl/status/status.h"
+#include "absl/log/initialize.h"
+#include "absl/log/absl_log.h"
 #include "dive/os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
@@ -209,9 +214,21 @@ void SetDarkMode(QApplication &app)
 }
 
 //--------------------------------------------------------------------------------------------------
+
+#define STATUS_ADD_SOURCE_LOCATION(status) \
+    status.SetPayload("source_location", absl::Cord((__FILE_NAME__ ":") + std::to_string(__LINE__)))
 int main(int argc, char *argv[])
 {
+    absl::SetProgramUsageMessage("Dive GUI");
+    absl::ParseCommandLine(argc, argv);
+    absl::InitializeLog();
     absl::InitializeSymbolizer(argv[0]);
+
+    absl::Status status = absl::InvalidArgumentError("example");
+    STATUS_ADD_SOURCE_LOCATION(status);
+
+    ABSL_LOG(INFO) << status;
+    ABSL_LOG(INFO) << *status.GetPayload("source_location");
 
     CrashHandler::Initialize(argv[0]);
 
@@ -227,9 +244,10 @@ int main(int argc, char *argv[])
         argc--;
         argv++;
     }
+    /*
     if (argc != 1 && argc != 2)
         return 0;
-
+    */
     Dive::AttachToTerminalOutputIfAvailable();
 
     // Print version info if asked to on the command line.
@@ -291,12 +309,13 @@ int main(int argc, char *argv[])
         qDebug()
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
-
+    /*
     if (argc == 2)
     {
         // This is executed async.
         main_window->LoadFile(argv[1], false, true);
     }
+    */
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
     QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
