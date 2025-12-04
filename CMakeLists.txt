@@ -38,6 +38,8 @@ option(
     ON
 )
 
+option(DIVE_BUNDLE_SCRIPTED_UI "Include scripted UI in MacOS bundle." OFF)
+
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
@@ -289,31 +291,37 @@ if(NOT ANDROID)
     # MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
     # This has been fixed in https://github.com/google/dive/pull/541
     if(APPLE)
-        set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive_ui_scripted
-        )
+        if(DIVE_BUNDLE_SCRIPTED_UI)
+            set(DIVE_SCRIPTED_UI_PATH
+                ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive_ui_scripted
+            )
+        else()
+            set(DIVE_SCRIPTED_UI_PATH "")
+        endif()
     else()
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive_ui_scripted)
+        set(DIVE_SCRIPTED_UI_PATH ${CMAKE_BINARY_DIR}/ui/dive_ui_scripted)
     endif()
     make_directory(${DIVE_TEST_OUTPUT_PATH})
-    add_test(
-        NAME Regression_StackOverflow_MacOS
-        COMMAND
-            ${DIVE_EXECUTABLE_PATH} --test_exit_after_load
-            ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
-    )
-    add_test(
-        NAME DiveUI_Screenshot
-        COMMAND
-            ${DIVE_EXECUTABLE_PATH}
-            --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot.png
-            ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
-    )
-    add_test(
-        NAME DiveUI_Screenshot_NativeStyle
-        COMMAND
-            ${DIVE_EXECUTABLE_PATH} --native_style
-            --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot_native_style.png
-            ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
-    )
+    if(DIVE_SCRIPTED_UI_PATH)
+        add_test(
+            NAME Regression_StackOverflow_MacOS
+            COMMAND
+                ${DIVE_SCRIPTED_UI_PATH} --test_exit_after_load
+                ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+        )
+        add_test(
+            NAME DiveUI_Screenshot
+            COMMAND
+                ${DIVE_SCRIPTED_UI_PATH}
+                --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot.png
+                ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+        )
+        add_test(
+            NAME DiveUI_Screenshot_NativeStyle
+            COMMAND
+                ${DIVE_SCRIPTED_UI_PATH} --native_style
+                --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot_native_style.png
+                ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+        )
+    endif()
 endif()

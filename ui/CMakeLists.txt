@@ -211,6 +211,9 @@ endif()
 
 if(APPLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    if(DIVE_BUNDLE_SCRIPTED_UI)
+        install(TARGETS ${PROJECT_NAME}_scripted BUNDLE DESTINATION .)
+    endif()
     install(
         CODE
             "

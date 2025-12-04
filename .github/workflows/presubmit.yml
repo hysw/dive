@@ -323,6 +323,7 @@ jobs:
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Debug \
+            -DDIVE_BUNDLE_SCRIPTED_UI=ON \
             -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
@@ -376,6 +377,7 @@ jobs:
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Release \
+            -DDIVE_BUNDLE_SCRIPTED_UI=ON \
             -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
