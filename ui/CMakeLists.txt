@@ -42,7 +42,12 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(Qt5Widgets CONFIG REQUIRED)
 
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(
+    GLOB SRC_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sqtt/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/event_timing/*.cpp"
+)
 if(MSVC)
     # Add resource files for Windows build (for version information)
     file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
@@ -64,30 +69,46 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
-# Tell CMake to create the Dive executable
-add_executable(
-    ${PROJECT_NAME}
+set(DIVE_UI_IMPL_NAME "${PROJECT_NAME}_impl")
+add_library(
+    ${DIVE_UI_IMPL_NAME}
     ${HDR_FILES}
     ${SRC_FILES}
     ${COMMON_HDR_FILES}
     ${COMMON_SRC_FILES}
-    resources.qrc
 )
 
-# For release builds, build Dive UI as WIN32 GUI application instead of a console application.
-if(MSVC)
-    set_target_properties(
-        ${PROJECT_NAME}
-        PROPERTIES
-            WIN32_EXECUTABLE $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
-    )
-endif()
+macro(make_dive_ui_executable TARGET_NAME ENTRY_POINT)
+    add_executable(${TARGET_NAME} ${ENTRY_POINT} resources.qrc)
+
+    target_link_libraries(${TARGET_NAME} PRIVATE ${DIVE_UI_IMPL_NAME})
+
+    # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
+    if(MSVC)
+        set_target_properties(
+            ${TARGET_NAME}
+            PROPERTIES
+                WIN32_EXECUTABLE
+                    $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
+        )
+    endif()
+endmacro()
+
+# Tell CMake to create the Dive executable
+make_dive_ui_executable(${PROJECT_NAME} "entry_point/main.cpp")
+make_dive_ui_executable(
+    ${PROJECT_NAME}_scripted
+    "entry_point/main_scripted.cpp"
+)
+
+# Custom executable name
+set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
 # Use the Widgets module from Qt 5
-target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
+target_link_libraries(${DIVE_UI_IMPL_NAME} Qt5::Widgets)
 
 target_link_libraries(
-    ${PROJECT_NAME}
+    ${DIVE_UI_IMPL_NAME}
     absl::flags
     absl::flags_parse
     absl::failure_signal_handler
@@ -105,11 +126,8 @@ target_link_libraries(
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
+    target_link_libraries(${DIVE_UI_IMPL_NAME} stdc++fs)
 endif()
-
-# Custom executable name
-set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
 # Required for some PAL files
 add_definitions(-DLITTLEENDIAN_CPU)
@@ -127,12 +145,12 @@ if(MSVC)
     # 4127: "conditional expression is constant" warnings
     # 4324: structure was padded due to alignment specifier
     target_compile_options(
-        ${PROJECT_NAME}
+        ${DIVE_UI_IMPL_NAME}
         PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324
     )
 else()
     target_compile_options(
-        ${PROJECT_NAME}
+        ${DIVE_UI_IMPL_NAME}
         PRIVATE
             -Wall
             -Wextra

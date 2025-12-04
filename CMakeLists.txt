@@ -290,10 +290,10 @@ if(NOT ANDROID)
     # This has been fixed in https://github.com/google/dive/pull/541
     if(APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive_ui_scripted
         )
     else()
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
+        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive_ui_scripted)
     endif()
     make_directory(${DIVE_TEST_OUTPUT_PATH})
     add_test(

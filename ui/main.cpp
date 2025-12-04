@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#include "ui/main.h"
+
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -53,8 +55,6 @@ constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
 constexpr int kScreenshotDelay = 5000;       // 5s
 
-ABSL_FLAG(std::string, test_screenshot, "", "Take screenshot after load, then exit.");
-ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
 ABSL_FLAG(bool, native_style, false, "Use system provided style");
 
 // QApplication flags:
@@ -235,14 +235,52 @@ auto SetupFlags(int argc, char **argv)
 }
 
 //--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+struct DiveUIMain::Impl
+{
+    int    m_argc = 0;
+    char **m_argv = nullptr;
+
+    const char *m_program_name = nullptr;
+
+    std::vector<char *> m_positional_args = {};
+
+    TestOptions m_test_opts = {};
+
+    int Run();
+};
+
+DiveUIMain::DiveUIMain(int argc, char **argv) :
+    m_impl(Impl{
+    .m_argc = argc,
+    .m_argv = argv,
+    .m_program_name = (argc > 0 ? *argv : "DiveUI"),
+    })
 {
     Dive::AttachToTerminalOutputIfAvailable();
-    std::vector<char *> positional_args = SetupFlags(argc, argv);
+    m_impl->m_positional_args = SetupFlags(argc, argv);
+}
 
-    absl::InitializeSymbolizer(argv[0]);
+DiveUIMain::~DiveUIMain()
+{
+    // For m_impl::~ImplPointer();
+}
 
-    CrashHandler::Initialize(argv[0]);
+void DiveUIMain::SetOptions(const TestOptions &opts)
+{
+    m_impl->m_test_opts = opts;
+}
+
+int DiveUIMain::Run()
+{
+    return m_impl->Run();
+}
+
+//--------------------------------------------------------------------------------------------------
+int DiveUIMain::Impl::Run()
+{
+    absl::InitializeSymbolizer(m_program_name);
+
+    CrashHandler::Initialize(m_program_name);
 
     absl::FailureSignalHandlerOptions options;
     options.writerfn = CrashHandler::Writer;
@@ -272,7 +310,7 @@ int main(int argc, char *argv[])
     Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication app(argc, argv);
+    QApplication app(m_argc, m_argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
 
     if (!native_style)
@@ -296,16 +334,16 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
-    if (absl::GetFlag(FLAGS_test_exit_after_load))
+    if (m_test_opts.exit_after_load)
     {
         QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
     }
 
     bool maximize = false;
-    if (auto savepath = absl::GetFlag(FLAGS_test_screenshot); !savepath.empty())
+    if (!m_test_opts.screenshot.empty())
     {
         maximize = true;
-        auto func = [main_window, savepath]() {
+        auto func = [main_window, savepath = m_test_opts.screenshot]() {
             QPixmap pixmap(main_window->size());
             main_window->render(&pixmap);
             pixmap.save(QString::fromStdString(savepath));
@@ -322,10 +360,10 @@ int main(int argc, char *argv[])
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
 
-    if (positional_args.size() == 2)
+    if (m_positional_args.size() == 2)
     {
         // This is executed async.
-        main_window->LoadFile(positional_args.back(), false, true);
+        main_window->LoadFile(m_positional_args.back(), false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
