@@ -101,8 +101,14 @@ make_dive_ui_executable(
     "entry_point/main_scripted.cpp"
 )
 
+if(DIVE_BUNDLE_SCRIPTED_UI)
+    set(DIVE_UI_BUNDLED_TARGET ${PROJECT_NAME}_scripted)
+else()
+    set(DIVE_UI_BUNDLED_TARGET ${PROJECT_NAME})
+endif()
+
 # Custom executable name
-set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
+set_property(TARGET ${DIVE_UI_BUNDLED_TARGET} PROPERTY OUTPUT_NAME "dive")
 
 # Use the Widgets module from Qt 5
 target_link_libraries(${DIVE_UI_IMPL_NAME} Qt5::Widgets)
@@ -202,7 +208,7 @@ endif()
 
 if(APPLE)
     set_target_properties(
-        ${PROJECT_NAME}
+        ${DIVE_UI_BUNDLED_TARGET}
         PROPERTIES
             MACOSX_BUNDLE TRUE
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
@@ -210,7 +216,7 @@ if(APPLE)
 endif()
 
 if(APPLE)
-    install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    install(TARGETS ${DIVE_UI_BUNDLED_TARGET} BUNDLE DESTINATION .)
     install(
         CODE
             "
