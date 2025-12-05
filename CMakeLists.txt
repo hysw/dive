@@ -306,21 +306,21 @@ if(NOT ANDROID)
         add_test(
             NAME Regression_StackOverflow_MacOS
             COMMAND
-                ${DIVE_SCRIPTED_UI_PATH} --test_exit_after_load
+                ${DIVE_SCRIPTED_UI_PATH} --test_scenario=exit_after_load
                 ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
         )
         add_test(
             NAME DiveUI_Screenshot
             COMMAND
-                ${DIVE_SCRIPTED_UI_PATH}
-                --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot.png
+                ${DIVE_SCRIPTED_UI_PATH} --test_scenario=screenshot --maximize
+                --test_output=${DIVE_TEST_OUTPUT_PATH} --test_prefix=screenshot-
                 ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
         )
         add_test(
             NAME DiveUI_Screenshot_NativeStyle
             COMMAND
-                ${DIVE_SCRIPTED_UI_PATH} --native_style
-                --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot_native_style.png
+                ${DIVE_SCRIPTED_UI_PATH} --test_scenario=screenshot --native_style --maximize
+                --test_output=${DIVE_TEST_OUTPUT_PATH} --test_prefix=screenshot-native-
                 ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
         )
     endif()

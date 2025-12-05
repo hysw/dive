@@ -46,6 +46,7 @@ file(
     GLOB SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sqtt/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scenarios/*.cpp" # only for scripted ui
     "${CMAKE_CURRENT_SOURCE_DIR}/event_timing/*.cpp"
 )
 if(MSVC)

@@ -16,16 +16,22 @@
 
 #include "absl/flags/flag.h"
 #include "ui/main.h"
+#include "ui/scenarios/scenarios.h"
 
-ABSL_FLAG(std::string, test_screenshot, "", "Take screenshot after load, then exit.");
-ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
+ABSL_FLAG(std::string, test_prefix, "test-", "Test artifact prefix");
+ABSL_FLAG(std::string, test_output, "test_output", "Artifact output directory");
+ABSL_FLAG(std::string, test_scenario, "", "Run a scenario.");
 
 int main(int argc, char** argv)
 {
     DiveUIMain runner(argc, argv);
+
     runner.SetOptions(DiveUIMain::TestOptions{
-    .exit_after_load = absl::GetFlag(FLAGS_test_exit_after_load),
-    .screenshot = absl::GetFlag(FLAGS_test_screenshot),
-    });
+    .test_prefix = absl::GetFlag(FLAGS_test_prefix),
+    .test_output = absl::GetFlag(FLAGS_test_output),
+    .scenario = [](ScenarioController& controller) {
+        DiveUIScenarios::ExecuteScenario(controller, absl::GetFlag(FLAGS_test_scenario));
+    } });
+
     return runner.Run();
 };

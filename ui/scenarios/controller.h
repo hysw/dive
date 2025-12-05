@@ -16,36 +16,30 @@
 
 #pragma once
 
-#include <functional>
 #include <string>
 
 #include "dive/ui/forward.h"
-#include "ui/impl_pointer.h"
 
-class DiveUIMain
+class ScenarioController
 {
 public:
-    struct Impl;
-    struct TestOptions
+    struct Data
     {
-        std::string test_prefix = "test-";
-        std::string test_output = "test_output";
-
-        std::function<void(ScenarioController&)> scenario;
+        MainWindow* main_window = nullptr;
+        std::string prefix;
+        std::string output;
     };
 
-    DiveUIMain(const DiveUIMain&) = delete;
-    DiveUIMain(DiveUIMain&&) = delete;
-    DiveUIMain& operator=(const DiveUIMain&) = delete;
-    DiveUIMain& operator=(DiveUIMain&&) = delete;
+    explicit ScenarioController(Data&& data) :
+        m_data(std::move(data))
+    {
+    }
 
-    DiveUIMain(int argc, char** argv);
-    ~DiveUIMain();
+    MainWindow* GetMainWindow() const { return m_data.main_window; }
 
-    void SetOptions(const TestOptions& opts);
-
-    int Run();
+    const std::string& GetPrefix() const { return m_data.prefix; }
+    const std::string& GetOutput() const { return m_data.output; }
 
 private:
-    ImplPointer<Impl> m_impl;
+    Data m_data;
 };
