@@ -23,12 +23,12 @@
 
 #include "dive_core/context.h"
 #include "dive_core/data_core.h"
-#include "trace_stats.h"
-#include "pm4_info.h"
+#include "dive_core/pm4_init.h"
+#include "trace_stats/trace_stats.h"
 
 int main(int argc, char **argv)
 {
-    Pm4InfoInit();
+    Dive::Pm4Init();
 
     // Handle args
     if ((argc != 2) && (argc != 3))

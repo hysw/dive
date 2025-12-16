@@ -1,4 +1,3 @@
-#
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-add_library(dive_src_includes INTERFACE)
+include_guard(DIRECTORY)
+
+if(NOT "${DIVE_SOURCE_ROOT_DIR}")
+    set(DIVE_SOURCE_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
+endif()
+
+add_library(vulkan_headers INTERFACE)
 target_include_directories(
-    dive_src_includes
-    INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}"
+    vulkan_headers
+    INTERFACE "${DIVE_SOURCE_ROOT_DIR}/third_party/Vulkan-Headers/include"
 )
-
-add_subdirectory(dive)

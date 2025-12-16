@@ -33,42 +33,30 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-include_directories(
-    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_BINARY_DIR}
-    ${LibArchive_INCLUDE_DIRS}
-)
-
 add_definitions(-DLITTLEENDIAN_CPU)
 
 add_library(
     ${PROJECT_NAME}_lib
-    ${DIVE_CLI_LIB_SOURCE_FILES}
-    ${PM4_GENERATED_SRC_FILE}
-    ${PM4_GENERATED_HDR_FILE}
-)
-
-target_sources(
-    ${PROJECT_NAME}_lib
-    PRIVATE
-        cli.cpp
-        cli.h
-        commands.cpp
-        commands.h
-        format_output.cpp
-        format_output.h
+    cli.cpp
+    cli.h
+    commands.cpp
+    commands.h
+    format_output.cpp
+    format_output.h
 )
 
 target_link_libraries(
     ${PROJECT_NAME}_lib
-    PRIVATE dive_core version_info dive_legacy_includes
+    PRIVATE dive_legacy_includes dive_core version_info
 )
 
 add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(
     ${PROJECT_NAME}
-    PRIVATE ${PROJECT_NAME}_lib ${PEFFETTO_TRACE_READER_LIB}
+    PRIVATE
+        dive_legacy_includes
+        ${PROJECT_NAME}_lib
+        ${PEFFETTO_TRACE_READER_LIB}
 )
 
 if(MSVC)

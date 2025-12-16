@@ -26,12 +26,6 @@ project(diveCaptureLayer)
 set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_dive)
 
-include_directories(
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/
-)
-
 add_library(
     ${target_name}
     SHARED

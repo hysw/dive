@@ -28,6 +28,7 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
+set(DIVE_SOURCE_ROOT_DIR "${CMAKE_SOURCE_DIR}")
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 # TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
@@ -111,10 +112,6 @@ if(ANDROID)
 endif()
 
 # ------------------------------------------------------------------------------
-# For generated headers
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
-
-# ------------------------------------------------------------------------------
 # Determine if third-party libraries should be built for the current target
 
 if(NOT ANDROID)
@@ -174,6 +171,25 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 add_subdirectory(third_party/abseil-cpp)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+include(build_defs/include_paths.cmake)
+
+# ------------------------------------------------------------------------------
+# Legacy include paths
+
+add_library(dive_legacy_includes INTERFACE)
+
+target_link_libraries(dive_legacy_includes INTERFACE vulkan_headers)
+
+target_include_directories(
+    dive_legacy_includes
+    INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dive"
+        "${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include"
+        "${LibArchive_INCLUDE_DIRS}"
+)
 
 # ------------------------------------------------------------------------------
 # Add all subdirectories of Dive project

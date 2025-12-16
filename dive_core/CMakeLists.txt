@@ -48,6 +48,21 @@ set(FREEDRENO_IR3_ISA_SRC_FILE "${FREEDRENO_ISA_DIRECTORY}/ir3-isa.c")
 set(FREEDRENO_IR3_ISA_HDR_FILE "${FREEDRENO_ISA_DIRECTORY}/ir3-isa.h")
 set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 
+add_library(dive_core_includes INTERFACE)
+
+target_include_directories(
+    dive_core_includes
+    INTERFACE
+        ${CMAKE_SOURCE_DIR}
+        ${DIVE_CORE_GENERATED_FILE_DIR}
+        ${FREEDRENO_ISA_DIRECTORY}
+        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+        ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
+        ${THIRDPARTY_DIRECTORY}/mesa/src/
+        ${THIRDPARTY_DIRECTORY}/mesa/include/
+        ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/
+)
+
 if(WIN32)
     set(Python3_FIND_REGISTRY "NEVER")
 endif() # WIN32
@@ -129,21 +144,6 @@ set(FREEDRENO_SRC_FILES
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_dev_info.c"
 )
 
-add_library(dive_core_includes INTERFACE)
-
-target_include_directories(
-    dive_core_includes
-    INTERFACE
-        ${CMAKE_SOURCE_DIR}
-        ${DIVE_CORE_GENERATED_FILE_DIR}
-        ${FREEDRENO_ISA_DIRECTORY}
-        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-        ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
-        ${THIRDPARTY_DIRECTORY}/mesa/src/
-        ${THIRDPARTY_DIRECTORY}/mesa/include/
-        ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/
-)
-
 if(NOT MSVC AND NOT APPLE)
     add_definitions(-DHAVE_ENDIAN_H) # Required for freedreno_dev_info.c on Linux
 endif() # NOT MSVC AND NOT APPLE
@@ -211,6 +211,8 @@ target_sources(
         "perf_metrics_data.h"
         "pm4_capture_data.cpp"
         "pm4_capture_data.h"
+        "pm4_init.cpp"
+        "pm4_init.h"
         "progress_tracker.h"
         "shader_disassembly.cpp"
         "shader_disassembly.h"
@@ -271,6 +273,7 @@ add_library(
 target_include_directories(
     freedreno_ir3
     PRIVATE
+        "${DIVE_CORE_GENERATED_FILE_DIR}"
         "${THIRDPARTY_DIRECTORY}/mesa/include"
         "${THIRDPARTY_DIRECTORY}/mesa/src"
         "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
@@ -354,7 +357,6 @@ if(HAVE_SECURE_GETENV)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -DHAVE_SECURE_GETENV)
 endif() # HAVE_SECURE_GETENV
 
-include_directories(${LibArchive_INCLUDE_DIRS})
 if(MSVC)
     set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 11) # To support alignas
     set_source_files_properties(

@@ -42,10 +42,17 @@ if(ANDROID)
 else()
     add_library(service service.cc trace_mgr.cc)
 endif()
-target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 target_link_libraries(
     service
-    PRIVATE network absl::flags absl::flags_parse trace_mgr command_utils
+    PUBLIC absl::core_headers
+    PRIVATE
+        dive_legacy_includes
+        network
+        absl::flags
+        absl::flags_parse
+        trace_mgr
+        command_utils
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
@@ -57,10 +64,6 @@ if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
 else()
     add_library(device_mgr device_mgr.cc android_application.cc)
-    target_include_directories(
-        device_mgr
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
     target_link_libraries(
         device_mgr
         dive_legacy_includes
@@ -86,10 +89,6 @@ else()
         absl::strings
         version_info
     )
-    target_include_directories(
-        dive_client_cli
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
 
     install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DESTINATION}")
 
@@ -108,10 +107,6 @@ else()
 
     add_executable(android_application_test android_application_test.cc)
     target_link_libraries(android_application_test device_mgr gtest gtest_main)
-    target_include_directories(
-        android_application_test
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
     gtest_discover_tests(android_application_test)
 
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
