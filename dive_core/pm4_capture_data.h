@@ -23,8 +23,7 @@
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/memory_manager_base.h"
-#include "log.h"
-#include "progress_tracker.h"
+#include "dive/types/progress_tracker.h"
 #include "dive_core/capture_data.h"
 
 // Forward declarations

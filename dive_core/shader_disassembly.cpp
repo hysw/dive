@@ -17,6 +17,7 @@
 #include "shader_disassembly.h"
 
 #include <mutex>
+#include <sstream>
 #include <string_view>
 
 #include "dive_core/common/memory_manager_base.h"
@@ -36,18 +37,6 @@ extern "C"
 
 namespace Dive
 {
-
-//--------------------------------------------------------------------------------------------------
-bool Disassemble(const uint8_t*                             shader_memory,
-                 uint64_t                                   shader_address,
-                 size_t                                     shader_max_size,
-                 std::vector<ShaderInstruction>*            instructions,
-                 std::function<std::string(uint64_t index)> on_emit,
-                 std::string&                               output,
-                 ILog*                                      log_ptr)
-{
-    return false;
-}
 
 //--------------------------------------------------------------------------------------------------
 std::string DisassembleA3XX(const uint8_t*       data,
@@ -103,14 +92,11 @@ std::string DisassembleA3XX(const uint8_t*       data,
 //--------------------------------------------------------------------------------------------------
 Disassembly::Disassembly(const IMemoryManager& mem_manager,
                          uint32_t              submit_index,
-                         uint64_t              address,
-                         ILog*                 log) :
+                         uint64_t              address) :
     m_mem_manager(mem_manager),
     m_submit_index(submit_index),
-    m_address(address),
-    m_log(log)
+    m_address(address)
 {
-    ((void)(m_log));  // avoid unused variable
 }
 
 //--------------------------------------------------------------------------------------------------

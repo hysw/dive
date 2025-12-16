@@ -16,7 +16,7 @@
 #include <QFrame>
 #include <QScrollArea>
 
-#include "dive_core/cross_ref.h"
+#include "dive/types/cross_ref.h"
 
 // Forward declarations
 class QLabel;

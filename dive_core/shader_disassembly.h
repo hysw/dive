@@ -16,14 +16,9 @@
 
 #pragma once
 
-#include <functional>
-#include <optional>
 #include <string>
 #include <vector>
 #include <mutex>
-
-#include "dive_core/common/common.h"
-#include "log.h"
 
 namespace Dive
 {
@@ -61,8 +56,7 @@ class Disassembly
 public:
     Disassembly(const IMemoryManager& mem_manager,
                 uint32_t              submit_index,
-                uint64_t              address,
-                ILog*                 log = nullptr);
+                uint64_t              address);
 
     std::string        GetListing() const { return GetData().m_listing; }
     uint64_t           GetShaderAddr() const { return m_address; }
@@ -100,17 +94,9 @@ private:
     [[maybe_unused]] const IMemoryManager& m_mem_manager;
     [[maybe_unused]] uint32_t              m_submit_index;
     uint64_t                               m_address;
-    [[maybe_unused]] ILog*                 m_log;
 
     mutable std::once_flag   m_disassembled_flag;
     mutable DisassembledData m_disassembled_data;
 };
 
-bool Disassemble(const uint8_t*                             shader_memory,
-                 uint64_t                                   shader_address,
-                 size_t                                     shader_size,
-                 std::vector<ShaderInstruction>*            instructions,
-                 std::function<std::string(uint64_t index)> on_emit,
-                 std::string&                               output,
-                 ILog*                                      log_ptr = nullptr);
 }  // namespace Dive

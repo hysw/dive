@@ -16,7 +16,7 @@
 #include "shader_view.h"
 
 #include "dive_core/command_hierarchy.h"
-#include "dive_core/cross_ref.h"
+#include "dive/types/cross_ref.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
 #include "dive_core/shader_disassembly.h"

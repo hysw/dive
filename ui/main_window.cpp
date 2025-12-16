@@ -60,7 +60,6 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "dive_core/data_core.h"
-#include "dive_core/log.h"
 #include "trace_stats/trace_stats.h"
 #include "ui/about_window.h"
 #include "ui/analyze_window.h"
@@ -224,10 +223,6 @@ MainWindow::MainWindow(ApplicationController &controller) :
     m_controller(controller)
 {
     controller.Register(*this);
-
-    // Output logs to both the "record" as well as console output
-    m_log_compound.AddLog(&m_log_record);
-    m_log_compound.AddLog(&m_log_console);
 
     m_error_dialog = new ErrorDialog(this);
 
@@ -1024,8 +1019,6 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
     {
         // We don't want other UI interaction as they cause race conditions.
         setDisabled(true);
-
-        m_log_record.Reset();
 
         m_command_hierarchy_view->setCurrentIndex(QModelIndex());
 

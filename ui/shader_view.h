@@ -16,7 +16,7 @@
 
 #pragma once
 #include <QFrame>
-#include "dive_core/cross_ref.h"
+#include "dive/types/cross_ref.h"
 
 // Forward declaration
 class QTreeWidget;

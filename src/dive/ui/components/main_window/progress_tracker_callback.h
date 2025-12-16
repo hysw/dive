@@ -14,16 +14,21 @@
  limitations under the License.
 */
 
-#include "progress_tracker_callback.h"
+#include <QObject>
 
-ProgressTrackerCallback::ProgressTrackerCallback() :
-    QObject(),
-    Dive::ProgressTracker()
-{
-}
+#include "dive/types/progress_tracker.h"
 
-//--------------------------------------------------------------------------------------------------
-void ProgressTrackerCallback::sendMessage(std::string message)
+#pragma once
+
+class ProgressTrackerCallback : public QObject, public Dive::ProgressTracker
 {
-    emit sendMessageSignal(QString::fromStdString(message));
-}
+    Q_OBJECT
+
+public:
+    ProgressTrackerCallback();
+
+    virtual void sendMessage(std::string message);
+
+signals:
+    void sendMessageSignal(const QString &message);
+};

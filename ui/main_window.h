@@ -23,10 +23,9 @@
 #include <optional>
 #include <vector>
 
+#include "dive/ui/components/main_window/progress_tracker_callback.h"
 #include "dive/ui/forward.h"
-#include "dive_core/cross_ref.h"
-#include "dive_core/log.h"
-#include "ui/progress_tracker_callback.h"
+#include "dive/types/cross_ref.h"
 
 class MainWindow : public QMainWindow
 {
@@ -190,9 +189,6 @@ private:
     std::unique_ptr<Dive::DataCore> m_data_core;
     QString                         m_capture_file;
     QString                         m_last_file_path;
-    Dive::LogRecord                 m_log_record;
-    Dive::LogConsole                m_log_console;
-    Dive::LogCompound               m_log_compound;
 
     QStatusBar *m_status_bar;
 

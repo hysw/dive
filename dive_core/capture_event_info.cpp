@@ -14,9 +14,12 @@
  limitations under the License.
 */
 
+#include "capture_event_info.h"
+
 #include <assert.h>
 
-#include "capture_event_info.h"
+#include <sstream>
+
 #include "dive_core/common/memory_manager_base.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 #include "pm4_info.h"

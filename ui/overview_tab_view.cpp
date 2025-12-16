@@ -25,7 +25,6 @@
 #include "most_expensive_events_view.h"
 #include "overview_tab_view.h"
 #include "draw_dispatch_stats_tab_view.h"
-#include "problems_view.h"
 #include "tile_stats_tab_view.h"
 #include "misc_stats_tab_view.h"
 

@@ -172,7 +172,10 @@ add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor absl::strings)
+target_link_libraries(
+    ${PROJECT_NAME}
+    PUBLIC dive_src_includes absl::no_destructor absl::strings
+)
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
 

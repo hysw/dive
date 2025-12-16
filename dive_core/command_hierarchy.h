@@ -20,6 +20,7 @@
 // =====================================================================================================================
 
 #pragma once
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,12 +28,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "pm4_capture_data.h"
 #include "capture_event_info.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"
+#include "pm4_capture_data.h"
 
 // Forward declarations
 struct PacketInfo;

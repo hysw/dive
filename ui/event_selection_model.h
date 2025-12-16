@@ -15,7 +15,7 @@
 #include <unordered_set>
 
 #include "dive_core/command_hierarchy.h"
-#include "dive_core/cross_ref.h"
+#include "dive/types/cross_ref.h"
 
 // The model class for the selection system
 class EventSelection : public QObject

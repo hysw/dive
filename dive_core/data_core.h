@@ -18,16 +18,17 @@
 #pragma once
 #include <deque>
 #include <map>
-#include <vector>
 #include <memory>
-#include "pm4_capture_data.h"
-#include "gfxr_capture_data.h"
-#include "dive_capture_data.h"
+#include <vector>
+
 #include "capture_event_info.h"
 #include "command_hierarchy.h"
-#include "event_state.h"
-#include "progress_tracker.h"
+#include "dive/types/progress_tracker.h"
+#include "dive_capture_data.h"
 #include "dive_command_hierarchy.h"
+#include "event_state.h"
+#include "gfxr_capture_data.h"
+#include "pm4_capture_data.h"
 
 namespace Dive
 {

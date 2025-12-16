@@ -15,8 +15,11 @@
  limitations under the License.
 */
 #include "data_core.h"
+
 #include <assert.h>
+
 #include <optional>
+
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/gfxr_vulkan_command_hierarchy.h"
 #include "pm4_info.h"
@@ -504,10 +507,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
                     uint32_t shader_index = static_cast<uint32_t>(
                     m_capture_metadata.m_shaders.size());
 
-                    m_capture_metadata.m_shaders.emplace_back(mem_manager,
-                                                              submit_index,
-                                                              addr,
-                                                              &cur_event_info.m_metadata_log);
+                    m_capture_metadata.m_shaders.emplace_back(mem_manager, submit_index, addr);
                     m_shader_addrs.insert(std::make_pair(addr, shader_index));
 
                     // Add the shader index to the EventInfo
