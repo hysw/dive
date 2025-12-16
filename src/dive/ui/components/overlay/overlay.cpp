@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "overlay.h"
+#include "dive/ui/components/overlay/overlay.h"
 
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -23,9 +23,9 @@
 #include <QPushButton>
 #include <QStackedLayout>
 #include <QTimer>
-#include <QtWidgets>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtWidgets>
 
 namespace
 {

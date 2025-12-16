@@ -15,9 +15,9 @@
 */
 #pragma once
 
-#include <functional>
 #include <QObject>
 #include <QScopedPointer>
+#include <functional>
 
 class QElapsedTimer;
 class QLabel;

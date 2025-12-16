@@ -16,14 +16,13 @@
 
 #pragma once
 
-#include <memory>
-
 #include <QMetaType>
 #include <QObject>
 #include <QReadWriteLock>
+#include <memory>
 
-#include "context.h"
-#include "file_path.h"
+#include "dive/ui/types/context.h"
+#include "dive/ui/types/file_path.h"
 
 class QThread;
 namespace Dive

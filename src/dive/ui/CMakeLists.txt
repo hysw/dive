@@ -14,12 +14,23 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(plugin)
-add_subdirectory(utils)
-add_subdirectory(common)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
-if(NOT ANDROID)
-    add_subdirectory(ui)
-endif()
+find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
+
+file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+
+add_library(dive_lib_ui ${HDR_FILES} ${SRC_FILES})
+
+target_link_libraries(
+    dive_lib_ui
+    PUBLIC
+        # Dive dependencies
+        dive_src_includes
+        # External dependencies
+        absl::core_headers
+        Qt5::Widgets
+)

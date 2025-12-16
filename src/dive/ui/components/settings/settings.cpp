@@ -13,11 +13,13 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "settings.h"
+#include "dive/ui/components/settings/settings.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QSettings>
-#include "dive_core/common.h"
+
+#include "absl/base/macros.h"
 
 //--------------------------------------------------------------------------------------------------
 Settings* Settings::Get()
@@ -89,7 +91,7 @@ Settings::DisplayUnit Settings::ReadRulerDisplayUnit()
 {
     QSettings   settings;
     DisplayUnit display_unit = (DisplayUnit)settings.value("rulerDisplayUnit", 0).toInt();
-    DIVE_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
+    ABSL_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
                 display_unit == kNs);
     return display_unit;
 }
@@ -105,7 +107,7 @@ Settings::DisplayUnit Settings::ReadEventListDisplayUnit()
 {
     QSettings   settings;
     DisplayUnit display_unit = (DisplayUnit)settings.value("eventListDisplayUnit", 0).toInt();
-    DIVE_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
+    ABSL_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
                 display_unit == kNs);
     return display_unit;
 }

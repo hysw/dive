@@ -18,9 +18,9 @@
 
 #include <QMetaType>
 
-#include "context.h"
-#include "file_path.h"
-#include "capture_file_manager.h"
+#include "dive/ui/types/context.h"
+#include "dive/ui/types/file_path.h"
+#include "ui/capture_file_manager.h"
 
 namespace Dive
 {

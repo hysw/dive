@@ -21,7 +21,7 @@
 #include <array>
 #include <set>
 #include <vector>
-#include "dive_core/context.h"
+#include "dive/types/context.h"
 #include "dive_core/capture_event_info.h"
 #include "dive_core/data_core.h"
 

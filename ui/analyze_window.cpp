@@ -16,8 +16,9 @@
 
 #include "analyze_window.h"
 
-#include <QComboBox>
+#include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDebug>
 #include <QFileDialog>
 #include <QGroupBox>
@@ -25,29 +26,28 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTemporaryDir>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <filesystem>
 #include <future>
 #include <optional>
-#include <qapplication.h>
-#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
-#include "application_controller.h"
-#include "settings.h"
-#include "overlay.h"
-#include "common/macros.h"
+#include "dive/common/macros.h"
+#include "dive/ui/components/overlay/overlay.h"
+#include "dive/ui/components/settings/settings.h"
+#include "ui/application_controller.h"
 
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)

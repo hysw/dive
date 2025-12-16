@@ -21,7 +21,7 @@
 #include <set>
 #include <array>
 
-#include "dive_core/context.h"
+#include "dive/types/context.h"
 #include "dive_core/data_core.h"
 #include "trace_stats.h"
 #include "pm4_info.h"

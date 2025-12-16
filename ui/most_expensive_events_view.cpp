@@ -13,6 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "ui/most_expensive_events_view.h"
+
 #include <QAction>
 #include <QHeaderView>
 #include <QLabel>
@@ -23,12 +25,11 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "dive/ui/components/settings/settings.h"
 #include "dive_core/conversions.h"
 #include "dive_core/data_core.h"
-#include "gui_constants.h"
-#include "hover_help_model.h"
-#include "most_expensive_events_view.h"
-#include "settings.h"
+#include "ui/gui_constants.h"
+#include "ui/hover_help_model.h"
 
 const uint32_t kDurationColumn = 2;
 const uint32_t kOccupancyDurationColumn = 3;

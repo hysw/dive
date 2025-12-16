@@ -16,26 +16,9 @@
 
 #pragma once
 
-#include <filesystem>
-
 #include <QMetaType>
-#include <QString>
 
-#include "utils/component_files.h"
+#include "dive/types/context.h"  // IWYU pragma: export
 
-namespace Dive
-{
-
-// Qt compatible std::filesystem::path .
-struct FilePath
-{
-    std::filesystem::path value;
-
-    std::string ToString() const { return value.string(); }
-    QString     ToQString() const { return QString::fromStdString(value.string()); }
-};
-
-}  // namespace Dive
 // qRegisterMetaType in custom_metatypes.cpp
-Q_DECLARE_METATYPE(Dive::FilePath)
-Q_DECLARE_METATYPE(Dive::ComponentFilePaths)
+Q_DECLARE_METATYPE(Dive::Context)

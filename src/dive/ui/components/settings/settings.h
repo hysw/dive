@@ -15,7 +15,9 @@
 */
 
 #pragma once
+
 #include <stdint.h>
+
 #include <QString>
 #include <QStringList>
 
