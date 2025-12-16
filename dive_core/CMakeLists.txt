@@ -28,7 +28,7 @@ include(CheckFunctionExists)
 if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-    file(GLOB_RECURSE NATVIS_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.natvis")
+    set(NATVIS_FILES "event_state.natvis")
 else()
     set(NATVIS_FILES "")
 endif() # MSVC
@@ -125,54 +125,110 @@ if(MSVC)
     )
 endif() # MSVC
 
-file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
-list(FILTER SRC_FILES EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/tests/.*")
-
-list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
-
-file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
-file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
-
-file(
-    GLOB_RECURSE FREEDRENO_SRC_FILES
+set(FREEDRENO_SRC_FILES
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_dev_info.c"
 )
 
-include_directories(
-    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}
-    ${DIVE_CORE_GENERATED_FILE_DIR}
-    ${FREEDRENO_ISA_DIRECTORY}
+add_library(dive_core_includes INTERFACE)
+
+target_include_directories(
+    dive_core_includes
+    INTERFACE
+        ${CMAKE_SOURCE_DIR}
+        ${DIVE_CORE_GENERATED_FILE_DIR}
+        ${FREEDRENO_ISA_DIRECTORY}
+        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+        ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
+        ${THIRDPARTY_DIRECTORY}/mesa/src/
+        ${THIRDPARTY_DIRECTORY}/mesa/include/
+        ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/
 )
-include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common)
-include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
-include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
-include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 
 if(NOT MSVC AND NOT APPLE)
     add_definitions(-DHAVE_ENDIAN_H) # Required for freedreno_dev_info.c on Linux
 endif() # NOT MSVC AND NOT APPLE
 
-add_library(
+add_library(${PROJECT_NAME} STATIC)
+
+target_sources(
     ${PROJECT_NAME}
-    STATIC
-    ${HDR_FILES}
-    ${SRC_FILES}
-    ${COMMON_HDR_FILES}
-    ${COMMON_SRC_FILES}
-    ${PM4_GENERATED_SRC_FILE}
-    ${NATVIS_FILES}
-    ${FREEDRENO_SRC_FILES}
-    ${TRACE_STATS_SRC_FILE}
+    PRIVATE ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES}
 )
+
+target_sources(
+    ${PROJECT_NAME}
+    PRIVATE
+        "common/common.h"
+        "common/dive_capture_format.h"
+        "common/emulate_pm4.cpp"
+        "common/emulate_pm4.h"
+        "common/gpudefs.h"
+        "common/memory_manager_base.h"
+        "common/pm4_packets/ce_pm4_packets.h"
+        "common/pm4_packets/me_pm4_packets.h"
+        "common/pm4_packets/pfp_pm4_packets.h"
+)
+
+target_sources(
+    ${PROJECT_NAME}
+    PRIVATE
+        "analysis.cpp"
+        "analysis.h"
+        "available_gpu_time.cpp"
+        "available_gpu_time.h"
+        "available_metrics.cpp"
+        "available_metrics.h"
+        "capture_data.h"
+        "capture_event_info.cpp"
+        "capture_event_info.h"
+        "command_hierarchy.cpp"
+        "command_hierarchy.h"
+        "common.cpp"
+        "common.h"
+        "context.h"
+        "conversions.h"
+        "cross_ref.h"
+        "data_core.cpp"
+        "data_core.h"
+        "dive_capture_data.cpp"
+        "dive_capture_data.h"
+        "dive_command_hierarchy.cpp"
+        "dive_command_hierarchy.h"
+        "dive_strings.cpp"
+        "dive_strings.h"
+        "error.cpp"
+        "error.h"
+        "event_state.cpp"
+        "event_state.h"
+        "gfxr_capture_data.cpp"
+        "gfxr_capture_data.h"
+        "gfxr_vulkan_command_hierarchy.cpp"
+        "gfxr_vulkan_command_hierarchy.h"
+        "info_id.h"
+        "log.cpp"
+        "log.h"
+        "perf_metrics_data.cpp"
+        "perf_metrics_data.h"
+        "pm4_capture_data.cpp"
+        "pm4_capture_data.h"
+        "progress_tracker.h"
+        "shader_disassembly.cpp"
+        "shader_disassembly.h"
+        "sqtt_ids.cpp"
+        "sqtt_ids.h"
+        "stl_replacement.h"
+        "struct_of_arrays.h"
+)
+
 add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor absl::strings)
+target_link_libraries(
+    ${PROJECT_NAME}
+    PUBLIC dive_core_includes absl::no_destructor absl::strings
+)
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
 

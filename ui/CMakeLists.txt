@@ -46,48 +46,207 @@ set(CMAKE_CXX_STANDARD 20)
 # Find the QtWidgets library
 find_package(Qt5Widgets CONFIG REQUIRED)
 
-file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+add_library(dive_ui_impl)
+
+target_sources(
+    dive_ui_impl
+    PRIVATE
+        "about_window.cpp"
+        "about_window.h"
+        "analyze_window.cpp"
+        "analyze_window.h"
+        "application_controller.cpp"
+        "application_controller.h"
+        "buffer_view.cpp"
+        "buffer_view.h"
+        "capture_file_manager.cpp"
+        "capture_file_manager.h"
+        "capture_worker.cpp"
+        "capture_worker.h"
+        "color_utils.cpp"
+        "color_utils.h"
+        "command_buffer_model.cpp"
+        "command_buffer_model.h"
+        "command_buffer_view.cpp"
+        "command_buffer_view.h"
+        "command_model.cpp"
+        "command_model.h"
+        "command_tab_view.cpp"
+        "command_tab_view.h"
+        "context.h"
+        "custom_metatypes.cpp"
+        "custom_metatypes.h"
+        "debug_utils.h"
+        "dive_tree_view.cpp"
+        "dive_tree_view.h"
+        "draw_dispatch_stats_model.cpp"
+        "draw_dispatch_stats_model.h"
+        "draw_dispatch_stats_tab_view.cpp"
+        "draw_dispatch_stats_tab_view.h"
+        "error_dialog.cpp"
+        "error_dialog.h"
+        "event_selection_model.cpp"
+        "event_selection_model.h"
+        "event_state_view.cpp"
+        "event_state_view.h"
+        "event_timing/event_graphics_item.cpp"
+        "event_timing/event_graphics_item.h"
+        "event_timing/event_timing_graphics_scene.cpp"
+        "event_timing/event_timing_graphics_scene.h"
+        "event_timing/event_timing_graphics_view.cpp"
+        "event_timing/event_timing_graphics_view.h"
+        "event_timing/event_timing_view.cpp"
+        "event_timing/event_timing_view.h"
+        "file_path.h"
+        "frame_tab_view.cpp"
+        "frame_tab_view.h"
+        "gfxr_capture_worker.cpp"
+        "gfxr_capture_worker.h"
+        "gfxr_vulkan_command_arguments_filter_proxy_model.cpp"
+        "gfxr_vulkan_command_arguments_filter_proxy_model.h"
+        "gfxr_vulkan_command_arguments_tab_view.cpp"
+        "gfxr_vulkan_command_arguments_tab_view.h"
+        "gfxr_vulkan_command_filter_proxy_model.cpp"
+        "gfxr_vulkan_command_filter_proxy_model.h"
+        "gfxr_vulkan_command_filter.cpp"
+        "gfxr_vulkan_command_filter.h"
+        "gfxr_vulkan_command_model.cpp"
+        "gfxr_vulkan_command_model.h"
+        "gpu_timing_model.cpp"
+        "gpu_timing_model.h"
+        "gpu_timing_tab_view.cpp"
+        "gpu_timing_tab_view.h"
+        "gui_constants.h"
+        "hover_help_model.cpp"
+        "hover_help_model.h"
+        "impl_pointer.h"
+        "main_gui.cpp"
+        "main_gui.h"
+        "main_window.cpp"
+        "main_window.h"
+        "misc_stats_model.cpp"
+        "misc_stats_model.h"
+        "misc_stats_tab_view.cpp"
+        "misc_stats_tab_view.h"
+        "most_expensive_events_view.cpp"
+        "most_expensive_events_view.h"
+        "object_names.h"
+        "overlay.cpp"
+        "overlay.h"
+        "overview_tab_view.cpp"
+        "overview_tab_view.h"
+        "package_filter.cpp"
+        "package_filter.h"
+        "perf_counter_model.cpp"
+        "perf_counter_model.h"
+        "perf_counter_tab_view.cpp"
+        "perf_counter_tab_view.h"
+        "problems_view.cpp"
+        "problems_view.h"
+        "progress_tracker_callback.cpp"
+        "progress_tracker_callback.h"
+        "property_panel.cpp"
+        "property_panel.h"
+        "search_bar.cpp"
+        "search_bar.h"
+        "search_dialog.cpp"
+        "search_dialog.h"
+        "settings.cpp"
+        "settings.h"
+        "shader_text_view.cpp"
+        "shader_text_view.h"
+        "shader_view.cpp"
+        "shader_view.h"
+        "shortcuts_window.cpp"
+        "shortcuts_window.h"
+        "shortcuts.h"
+        "sqtt/ruler_graphics_item.cpp"
+        "sqtt/ruler_graphics_item.h"
+        "text_file_view.cpp"
+        "text_file_view.h"
+        "tile_stats_tab_view.cpp"
+        "tile_stats_tab_view.h"
+        "tool_tip_summaries.cpp"
+        "tool_tip_summaries.h"
+        "trace_window.cpp"
+        "trace_window.h"
+        "tree_view_combo_box.cpp"
+        "tree_view_combo_box.h"
+        "viewport_stats_model.cpp"
+        "viewport_stats_model.h"
+        "window_scissors_stats_model.cpp"
+        "window_scissors_stats_model.h"
+)
+
+target_include_directories(
+    dive_ui_impl
+    PUBLIC
+        "${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include"
+        "${CMAKE_SOURCE_DIR}"
+        # Include CMAKE_BINARY_DIR for generated files.
+        "${CMAKE_BINARY_DIR}"
+        "${LibArchive_INCLUDE_DIRS}"
+)
+
+target_link_libraries(
+    dive_ui_impl
+    PUBLIC
+        absl::failure_signal_handler
+        absl::flags
+        absl::flags_parse
+        absl::span
+        absl::symbolize
+        Qt5::Widgets
+        component_files
+        device_mgr
+        dive_build_defs
+        dive_core
+        dive_lib_os
+        dive_lib_trace_stats
+        dive_plugin_loader
+        network
+        version_info
+)
+
+# std::filesystem needs to link with libstdc++fs for g++ before 9.0
+if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(dive_ui_impl PUBLIC stdc++fs)
+endif()
+
+# Tell CMake to create the Dive executable
+add_executable(${PROJECT_NAME})
+target_sources(${PROJECT_NAME} PRIVATE "main_exe.cpp" "resources.qrc")
+
 if(MSVC)
     # Add resource files for Windows build (for version information)
-    file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
-    set(SRC_FILES ${SRC_FILES} ${RC_FILES})
+    target_sources(${PROJECT_NAME} PRIVATE "version.rc")
 endif()
 
 if(APPLE)
     set(MACOSX_ICON_FILE "dive.icns")
     set_source_files_properties(
-        ${MACOSX_ICON_FILE}
+        "${MACOSX_ICON_FILE}"
         PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
     )
-    set(SRC_FILES ${SRC_FILES} ${MACOSX_ICON_FILE})
+    target_sources(${PROJECT_NAME} PRIVATE "${MACOSX_ICON_FILE}")
 endif()
 
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
-include_directories(${CMAKE_SOURCE_DIR})
-# Include CMAKE_BINARY_DIR for generated files.
-include_directories(${CMAKE_BINARY_DIR})
-include_directories(${LibArchive_INCLUDE_DIRS})
-
-# Tell CMake to create the Dive executable
-add_executable(
+target_link_libraries(
     ${PROJECT_NAME}
-    ${HDR_FILES}
-    ${SRC_FILES}
-    ${COMMON_HDR_FILES}
-    ${COMMON_SRC_FILES}
-    resources.qrc
+    PUBLIC
+        # Force whole archive link for flags
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,dive_ui_impl>"
 )
 
 # Enable asan and ubsan
 if(DIVE_BUILD_WITH_SANITIZER AND NOT MSVC)
     target_compile_options(
-        ${PROJECT_NAME}
+        dive_ui_impl
         PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
     )
     target_link_options(
-        ${PROJECT_NAME}
-        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+        dive_ui_impl
+        PUBLIC $<$<CONFIG:Debug>:-fsanitize=address,undefined>
     )
 endif()
 
@@ -98,31 +257,6 @@ if(MSVC)
         PROPERTIES
             WIN32_EXECUTABLE $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
     )
-endif()
-
-# Use the Widgets module from Qt 5
-target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
-
-target_link_libraries(
-    ${PROJECT_NAME}
-    absl::flags
-    absl::flags_parse
-    absl::failure_signal_handler
-    absl::span
-    absl::symbolize
-    network
-    dive_core
-    dive_lib_os
-    device_mgr
-    dive_plugin_loader
-    component_files
-    version_info
-    dive_build_defs
-)
-
-# std::filesystem needs to link with libstdc++fs for g++ before 9.0
-if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
 endif()
 
 # Custom executable name
