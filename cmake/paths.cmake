@@ -1,5 +1,4 @@
-#!/bin/bash
-
+#
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,26 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
-echo "Format in-place using gersemi tool"
+include_guard(DIRECTORY)
 
-SRC_DIRS=(
-    "capture_service"
-    "cli"
-    "cmake"
-    "dive_core"
-    "gfxr_dump_resources"
-    "gfxr_ext"
-    "gpu_time"
-    "host_cli"
-    "layer"
-    "lrz_validator"
-    "network"
-    "plugins"
-    "runtime_layer"
-    "trace_stats"
-    "ui"
-    "src"
-)
-
-gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"
+if(NOT DEFINED DIVE_REPOSITORY_DIR)
+    cmake_path(
+        SET DIVE_REPOSITORY_DIR
+        NORMALIZE
+        "${CMAKE_CURRENT_LIST_DIR}/.."
+    )
+    message(STATUS "DIVE_REPOSITORY_DIR=${DIVE_REPOSITORY_DIR}")
+endif()

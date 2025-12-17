@@ -32,6 +32,8 @@ set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 # TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
+include(cmake/paths.cmake)
+
 # Add an option to allow users to easily toggle the runtime layer build
 option(
     DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
