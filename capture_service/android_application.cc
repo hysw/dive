@@ -682,9 +682,17 @@ absl::Status VulkanCliApplication::GfxrSetup()
     std::string gfxr_capture_directory = absl::StrCat(kDeviceCapturePath,
                                                       "/",
                                                       m_gfxr_capture_file_directory);
+
+    auto pkgname = m_command;
+    if (auto pos = pkgname.rfind("/"); pos != std::string::npos)
+    {
+        pkgname = pkgname.substr(pos+1);
+    }
+
     std::string capture_file_location = absl::StrCat(gfxr_capture_directory,
-                                                     "/",
-                                                     m_command,
+                                                     (gfxr_capture_directory.ends_with('/') ? "" :
+                                                                                              "/"),
+                                                     pkgname,
                                                      ".gfxr");
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
     RETURN_IF_ERROR(
