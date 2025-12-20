@@ -228,6 +228,13 @@ format::HandleId                       commandPool,
 uint32_t                               commandBufferCount,
 HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
+
+    auto hptr = pCommandBuffers->GetHandlePointer();
+    if (hptr == nullptr)
+    {
+        return;
+    }
+
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnFreeCommandBuffers(commandBufferCount,
                                                                          pCommandBuffers
                                                                          ->GetHandlePointer());
@@ -369,10 +376,10 @@ format::HandleId                            fence)
 
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
     auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
-                                                 submit_infos,
-                                                 pfn_vkDeviceWaitIdle_,
-                                                 pfn_vkResetQueryPool_,
-                                                 pfn_vkGetQueryPoolResults_);
+                                                                submit_infos,
+                                                                pfn_vkDeviceWaitIdle_,
+                                                                pfn_vkResetQueryPool_,
+                                                                pfn_vkGetQueryPoolResults_);
 
     auto IsFrameBoundary = [](Decoded_VkSubmitInfo*  submit_info_data,
                               uint32_t               submit_count,

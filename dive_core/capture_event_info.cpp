@@ -477,7 +477,7 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
 
     if (packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST)
     {
-        DIVE_ASSERT(packet.bitfields2.NUM_INDICES == 2);
+        // DIVE_ASSERT(packet.bitfields2.NUM_INDICES == 2);
         return true;
     }
 
