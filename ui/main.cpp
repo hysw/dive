@@ -48,6 +48,7 @@
 #include "ui/dive_application.h"
 #include "ui/main_window.h"
 #include "utils/version_info.h"
+#include "dive_crashpad/client.h"
 #ifdef __linux__
 #include <dlfcn.h>
 #endif
@@ -267,6 +268,7 @@ bool ExecuteScenario(std::string_view scenario, MainWindow* main_window)
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
+    Dive::InitializeDiveCrashpad({/* ... */}).IgnoreError();
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
 

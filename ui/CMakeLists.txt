@@ -235,6 +235,7 @@ target_link_libraries(
     version_info
     dive_build_defs
     dive_lib_trace_stats
+    dive_crashpad_static
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
