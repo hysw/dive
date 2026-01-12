@@ -18,6 +18,8 @@
 
 #include <assert.h>
 
+#include "adreno.h"
+#include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/memory_manager_base.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 #include "pm4_info.h"
@@ -538,6 +540,12 @@ std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager& mem_m
             // These hardware options to not map to Vulkan!
             return std::nullopt;
     };
+}
+
+bool IsExcludedEndPacketOpcode(uint8_t opcode)
+{
+    return (opcode == CP_START_BIN || opcode == CP_INDIRECT_BUFFER_PFE ||
+            opcode == CP_INDIRECT_BUFFER_PFD || opcode == CP_INDIRECT_BUFFER_CHAIN);
 }
 
 }  // namespace Dive

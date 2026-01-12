@@ -53,6 +53,19 @@ if(APPLE)
     )
 endif()
 
+add_library( dive_ui_event_state_view
+    event_state_view.cpp
+    event_state_view.h
+)
+target_link_libraries(
+dive_ui_event_state_view
+PRIVATE
+    Qt5::Widgets
+    dive_core
+    dive_src_includes
+    dive_event_state
+)
+
 add_executable(
     ${PROJECT_NAME}
     # Qt
@@ -100,8 +113,6 @@ add_executable(
     error_dialog.h
     event_selection_model.cpp
     event_selection_model.h
-    event_state_view.cpp
-    event_state_view.h
     frame_tab_view.cpp
     frame_tab_view.h
     gfxr_capture_worker.cpp
@@ -235,6 +246,7 @@ target_link_libraries(
     version_info
     dive_build_defs
     dive_lib_trace_stats
+    dive_ui_event_state_view
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0

@@ -125,8 +125,8 @@ void ShaderView::OnShaderSelectionChanged()
     // Determine shader type by matching column 0 string
     uint32_t shader_index = item_ptr->GetShaderIndex();
 
-    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
-    const Dive::Disassembly& shader_info = metadata.m_shaders[shader_index];
+    const auto& metadata = m_data_core.GetCaptureMetadata();
+    const Dive::Disassembly& shader_info = metadata.GetShader(shader_index);
     m_shader_code_text->append(shader_info.GetListing().c_str());
     m_shader_code_text->moveCursor(QTextCursor::Start);
     m_shader_code_text->setReadOnly(true);
@@ -163,16 +163,16 @@ void ShaderView::paintEvent(QPaintEvent* event)
 
     if (m_shader_list->topLevelItemCount() == 0)
     {
-        const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
+        const auto& metadata = m_data_core.GetCaptureMetadata();
         const Dive::CommandHierarchy& command_hierarchy = m_data_core.GetCommandHierarchy();
 
         auto update_shader_list = [&](uint64_t event_node_index) {
             uint32_t event_id = command_hierarchy.GetEventNodeId(event_node_index);
-            if (event_id >= metadata.m_event_info.size())
+            if (event_id >= metadata.GetEventCount())
             {
                 return;
             }
-            const Dive::EventInfo& event = metadata.m_event_info[event_id];
+            const Dive::EventInfo& event = metadata.GetEvent(event_id);
             for (const auto& reference : event.m_shader_references)
             {
                 auto shader_stage = (uint32_t)reference.m_stage;
@@ -190,7 +190,7 @@ void ShaderView::paintEvent(QPaintEvent* event)
                 uint32_t shader_index = reference.m_shader_index;
                 if (shader_index != UINT32_MAX)
                 {
-                    const Dive::Disassembly& shader_info = metadata.m_shaders[shader_index];
+                    const Dive::Disassembly& shader_info = metadata.GetShader(shader_index);
                     ShaderWidgetItem* treeItem = new ShaderWidgetItem(
                         (Dive::ShaderStage)shader_stage, shader_index, event_id, m_shader_list);
 

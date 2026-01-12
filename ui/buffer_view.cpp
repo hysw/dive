@@ -82,18 +82,18 @@ void BufferView::OnEventSelected(uint32_t event_index)
     m_buffer_indices.clear();
     if (event_index == UINT32_MAX) return;
 
-    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
+    const auto& metadata = m_data_core.GetCaptureMetadata();
 
     // Add the buffer(s) to the list
     const uint32_t kShaderStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
-    const Dive::EventInfo& event_info = metadata.m_event_info[event_index];
+    const Dive::EventInfo& event_info = metadata.GetEvent(event_index);
     for (uint32_t shader_stage = 0; shader_stage < kShaderStageCount; ++shader_stage)
     {
         uint32_t num_buffers = (uint32_t)event_info.m_buffer_indices[shader_stage].size();
         for (uint32_t buffer = 0; buffer < num_buffers; ++buffer)
         {
             uint32_t buffer_index = event_info.m_buffer_indices[shader_stage][buffer];
-            const Dive::BufferInfo& buffer_info = metadata.m_buffers[buffer_index];
+            const Dive::BufferInfo& buffer_info = metadata.GetBuffer(buffer_index);
             BufferWidgetItem* treeItem = new BufferWidgetItem(buffer_index, m_buffer_list);
 
             // Column 0
@@ -186,8 +186,8 @@ void BufferView::OnBufferSelectionChanged()
     uint32_t buffer_index = item_ptr->GetBufferIndex();
 
     // Grab the buffer metadata
-    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
-    const Dive::BufferInfo& buffer_info = metadata.m_buffers[buffer_index];
+    const auto& metadata = m_data_core.GetCaptureMetadata();
+    const Dive::BufferInfo& buffer_info = metadata.GetBuffer(buffer_index);
 
     // Set size of the table
     uint32_t num_dwords = buffer_info.m_size / sizeof(uint32_t);
@@ -199,7 +199,7 @@ void BufferView::OnBufferSelectionChanged()
     // Grab all the data
     std::vector<uint32_t> buffer_memory;
     buffer_memory.resize(num_dwords);
-    const Dive::EventInfo& event_info = metadata.m_event_info[m_event_index];
+    const Dive::EventInfo& event_info = metadata.GetEvent(m_event_index);
     const Dive::Pm4CaptureData& capture_data = m_data_core.GetPm4CaptureData();
     const Dive::MemoryManager& mem_manager = capture_data.GetMemoryManager();
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&buffer_memory[0], event_info.m_submit_index,

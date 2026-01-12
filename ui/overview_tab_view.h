@@ -33,7 +33,6 @@ void SetTabAvailable(QTabWidget* widget, int index, bool available);
 namespace Dive
 {
 class LogRecord;
-struct CaptureMetadata;
 struct CaptureStats;
 };  // namespace Dive
 
@@ -42,7 +41,7 @@ class OverviewTabView : public QFrame
     Q_OBJECT
 
  public:
-    OverviewTabView(const Dive::CaptureMetadata& capture_metadata, const Dive::CaptureStats& stats);
+    explicit OverviewTabView(const Dive::CaptureStats& stats);
 
     void LoadStatistics();
 

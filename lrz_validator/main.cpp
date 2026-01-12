@@ -19,11 +19,12 @@
 
 #include "dive_core/data_core.h"
 #include "dive_core/dive_core_init.h"
+#include "dive_core/event_state.h"
 
-bool ValidateLRZ(const Dive::CaptureMetadata& meta_data, const std::string& output_file_name)
+bool ValidateLRZ(Dive::CaptureMetadataRef meta_data, const std::string& output_file_name)
 {
-    size_t event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo& event_state = meta_data.m_event_state;
+    size_t event_count = meta_data.GetEventCount();
+    const Dive::EventStateInfo& event_state = meta_data.GetEventState();
     bool lrz_test_passed = true;
     std::optional<std::ofstream> output_file = std::nullopt;
     if (!output_file_name.empty())
@@ -46,7 +47,7 @@ bool ValidateLRZ(const Dive::CaptureMetadata& meta_data, const std::string& outp
 
     for (size_t i = 0; i < event_count; ++i)
     {
-        const Dive::EventInfo& info = meta_data.m_event_info[i];
+        const Dive::EventInfo& info = meta_data.GetEvent(i);
         // We only output the drawcalls in direct/binning mode
         if ((info.m_type == Dive::Util::EventType::kDraw) &&
             (info.m_render_mode == Dive::RenderModeType::kDirect ||
@@ -161,7 +162,7 @@ int main(int argc, char** argv)
     }
 
     // Load capture
-    std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
+    std::unique_ptr<Dive::DataCore> data_core = Dive::DataCore::Create();
     Dive::CaptureData::LoadResult load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
@@ -179,7 +180,7 @@ int main(int argc, char** argv)
     std::cout << "Validating LRZ...\n";
 
     // LRZ Validation
-    const Dive::CaptureMetadata& meta_data = data_core->GetCaptureMetadata();
+    Dive::CaptureMetadataRef meta_data = data_core->GetCaptureMetadata();
     const bool lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
     if (lrz_test_passed)
     {

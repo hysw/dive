@@ -131,7 +131,6 @@ target_include_directories(
     dive_core_includes
     INTERFACE
         ${CMAKE_SOURCE_DIR}
-        ${DIVE_CORE_GENERATED_FILE_DIR}
         ${FREEDRENO_ISA_DIRECTORY}
         ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
         ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
@@ -143,6 +142,13 @@ target_include_directories(
 if(NOT MSVC AND NOT APPLE)
     add_definitions(-DHAVE_ENDIAN_H) # Required for freedreno_dev_info.c on Linux
 endif() # NOT MSVC AND NOT APPLE
+
+add_library(dive_event_state event_state.cpp event_state.h)
+
+target_include_directories(
+    dive_event_state
+    PUBLIC "${CMAKE_SOURCE_DIR}" "${DIVE_CORE_GENERATED_FILE_DIR}"
+)
 
 add_library(
     ${PROJECT_NAME}
@@ -190,8 +196,6 @@ add_library(
     dive_strings.h
     error.cpp
     error.h
-    event_state.cpp
-    event_state.h
     gfxr_capture_data.cpp
     gfxr_capture_data.h
     gfxr_vulkan_command_hierarchy.cpp
@@ -220,6 +224,7 @@ add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 target_link_libraries(
     ${PROJECT_NAME}
     PUBLIC dive_core_includes absl::no_destructor absl::strings
+    PRIVATE dive_event_state
 )
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
@@ -263,6 +268,7 @@ add_library(
 target_include_directories(
     freedreno_ir3
     PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}"
         "${THIRDPARTY_DIRECTORY}/mesa/include"
         "${THIRDPARTY_DIRECTORY}/mesa/src"
         "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"

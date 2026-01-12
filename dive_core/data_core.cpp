@@ -18,24 +18,232 @@
 
 #include <assert.h>
 
+#include <deque>
+#include <map>
+#include <memory>
 #include <optional>
+#include <vector>
 
+#include "capture_event_info.h"
+#include "command_hierarchy.h"
+#include "dive_capture_data.h"
+#include "dive_command_hierarchy.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/gfxr_vulkan_command_hierarchy.h"
+#include "event_state.h"
+#include "gfxr_capture_data.h"
+#include "pm4_capture_data.h"
 #include "pm4_info.h"
+#include "progress_tracker.h"
 
 namespace Dive
 {
 
+//--------------------------------------------------------------------------------------------------
+// Metadata that describes information in the capture
+struct CaptureMetadata
+{
+    // Information about the command buffers, represented in a tree hierarchy
+    CommandHierarchy m_command_hierarchy;
+
+    // Information about each shader in the capture
+    // Note: deque is used here since Disassembly is not copyable nor movable.
+    std::deque<Disassembly> m_shaders;
+
+    // Information about each buffer in the capture
+    std::vector<BufferInfo> m_buffers;
+
+    // Information about each event in the capture
+    std::vector<EventInfo> m_event_info;
+
+    // Register state tracking for each event
+    // This is separated from EventInfo to take advantage of code-gen
+    EventStateInfo m_event_state;
+
+    // Information about the submits in this capture
+    uint64_t m_num_pm4_packets;
+};
+
+//--------------------------------------------------------------------------------------------------
+// Main container for the capture data as well as associated metadata
+class DataCoreImpl : public DataCore
+{
+ protected:
+    ProgressTracker* m_progress_tracker;
+
+ public:
+    DataCoreImpl() = default;
+    virtual ~DataCoreImpl() = default;
+
+    explicit DataCoreImpl(ProgressTracker* progress_tracker);
+
+    // Load the capture file
+    CaptureData::LoadResult LoadDiveCaptureData(const std::string& file_name) override;
+    CaptureData::LoadResult LoadPm4CaptureData(const std::string& file_name) override;
+    CaptureData::LoadResult LoadGfxrCaptureData(const std::string& file_name) override;
+
+    // Parse the capture to generate info that describes the capture
+    bool ParseDiveCaptureData() override;
+    bool ParsePm4CaptureData() override;
+    bool ParseGfxrCaptureData() override;
+
+    // Create meta data from the captured data
+    bool CreateDiveMetaData() override;
+    bool CreatePm4MetaData() override;
+
+    // Get the pm4 capture data (includes access to raw command buffers and memory blocks)
+    const Pm4CaptureData& GetPm4CaptureData() const override;
+    Pm4CaptureData& GetMutablePm4CaptureData() override;
+
+    // Get the gfxr capture data
+    const GfxrCaptureData& GetGfxrCaptureData() const override;
+    GfxrCaptureData& GetMutableGfxrCaptureData() override;
+
+    // Get the command-hierarchy, which is a tree view interpretation of the command buffer
+    const CommandHierarchy& GetCommandHierarchy() const override;
+
+    // Get metadata describing the capture (info obtained by parsing the capture)
+    CaptureMetadataRef GetCaptureMetadata() const override;
+
+ private:
+    // Create command hierarchy from the captured data
+    bool CreateDiveCommandHierarchy();
+    bool CreatePm4CommandHierarchy();
+    bool CreateGfxrCommandHierarchy();
+    // The relatively raw captured dive data (memory & submit blocks)
+    DiveCaptureData m_dive_capture_data;
+    // The relatively raw captured pm4 data (memory & submit blocks)
+    Pm4CaptureData m_pm4_capture_data;
+    // The relatively raw captured gfxr data
+    GfxrCaptureData m_gfxr_capture_data;
+
+    // Metadata for the capture data in m_capture_data
+    CaptureMetadata m_capture_metadata;
+};
+
+#if defined(ENABLE_CAPTURE_BUFFERS)
+//--------------------------------------------------------------------------------------------------
+// Shader reflector callback class, for use by the CaptureMetadataCreator
+class SRDCallbacks : public IShaderReflectorCallbacks
+{
+ public:
+    // Callbacks on each SRD table used by the shader. The SRD table is a buffer that contains 1 or
+    // more SRDs, each of which might be a different type
+    virtual bool OnSRDTable(ShaderStage shader_stage, uint64_t va_addr, uint64_t size,
+                            void* user_ptr)
+    {
+        return true;
+    }
+
+    virtual bool OnSRDTable(ShaderStage shader_stage, void* data_ptr, uint64_t va_addr,
+                            uint64_t size, void* user_ptr)
+    {
+        return true;
+    }
+};
+#endif
+
+//--------------------------------------------------------------------------------------------------
+// Handles creation of much of the metadata "info" from the capture
+class CaptureMetadataCreator : public EmulateCallbacksBase
+{
+ public:
+    static std::unique_ptr<CaptureMetadataCreator> Create(CaptureMetadata& capture_metadata);
+    ~CaptureMetadataCreator() override;
+
+    void OnSubmitStart(uint32_t submit_index, const SubmitInfo& submit_info) override;
+    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo& submit_info) override;
+
+    const EmulateStateTracker& GetStateTracker() const { return m_state_tracker; }
+
+    // Callbacks
+    bool OnIbStart(uint32_t submit_index, uint32_t ib_index, const IndirectBufferInfo& ib_info,
+                   IbType type) override;
+
+    bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
+                 const IndirectBufferInfo& ib_info) override;
+
+    bool OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index, uint32_t ib_index,
+                  uint64_t va_addr, Pm4Header header) override;
+
+ protected:
+    CaptureMetadataCreator(CaptureMetadata& capture_metadata);
+
+ private:
+    bool HandleShaders(const IMemoryManager& mem_manager, uint32_t submit_index, uint32_t opcode);
+    void FillDrawEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillResolveOrClearEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillResolveEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillClearEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillInputAssemblyState(EventStateInfo::Iterator event_state_it);
+    void FillTessellationState(EventStateInfo::Iterator event_state_it);
+    void FillViewportState(EventStateInfo::Iterator event_state_it);
+    void FillRasterizerState(EventStateInfo::Iterator event_state_it);
+    void FillMultisamplingState(EventStateInfo::Iterator event_state_it);
+    void FillDepthState(EventStateInfo::Iterator event_state_it);
+    void FillColorBlendState(EventStateInfo::Iterator event_state_it);
+    void FillHardwareSpecificStates(EventStateInfo::Iterator event_state_it);
+
+    // Map from shader address to shader index (in m_capture_metadata.m_shaders)
+    std::map<uint64_t, uint32_t> m_shader_addrs;
+
+    // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
+    std::map<uint64_t, uint32_t> m_buffer_addrs;
+
+    CaptureMetadata& m_capture_metadata;
+    RenderModeType m_current_render_mode = RenderModeType::kUnknown;
+
+#if defined(ENABLE_CAPTURE_BUFFERS)
+    // SRDCallbacks is a friend class, since it is essentially doing part of
+    // CaptureMetadataCreator's work and is only a separate class due to the callback nature of SRD
+    // reflection
+    friend class SRDCallbacks;
+#endif
+};
+
+std::unique_ptr<DataCore> DataCore::Create(ProgressTracker* tracker)
+{
+    return std::make_unique<DataCoreImpl>(tracker);
+}
+
+/*
+const std::deque<Disassembly>& CaptureMetadataRef::GetShaders() const { return m_ref->m_shaders; }
+const std::vector<BufferInfo>& CaptureMetadataRef::GetBuffers() const { return m_ref->m_buffers; }
+const std::vector<EventInfo>& CaptureMetadataRef::GetEvents() const { return m_ref->m_event_info; }
+*/
+
+size_t CaptureMetadataRef::GetShaderCount() const { return m_ref->m_shaders.size(); }
+size_t CaptureMetadataRef::GetBufferCount() const { return m_ref->m_buffers.size(); }
+size_t CaptureMetadataRef::GetEventCount() const { return m_ref->m_event_info.size(); }
+
+const Disassembly& CaptureMetadataRef::GetShader(size_t index) const
+{
+    return m_ref->m_shaders[index];
+}
+
+const BufferInfo& CaptureMetadataRef::GetBuffer(size_t index) const
+{
+    return m_ref->m_buffers[index];
+}
+
+const EventInfo& CaptureMetadataRef::GetEvent(size_t index) const
+{
+    return m_ref->m_event_info[index];
+}
+
+const EventStateInfo& CaptureMetadataRef::GetEventState() const { return m_ref->m_event_state; }
+
 // =================================================================================================
-// DataCore
+// DataCoreImpl
 // =================================================================================================
 
 //--------------------------------------------------------------------------------------------------
-DataCore::DataCore(ProgressTracker* progress_tracker) : m_progress_tracker(progress_tracker) {}
+DataCoreImpl::DataCoreImpl(ProgressTracker* progress_tracker) : m_progress_tracker(progress_tracker)
+{
+}
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCoreImpl::LoadDiveCaptureData(const std::string& file_name)
 {
     std::filesystem::path rd_file_path(file_name);
     rd_file_path.replace_extension(".rd");
@@ -44,7 +252,7 @@ CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string& file_na
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCoreImpl::LoadPm4CaptureData(const std::string& file_name)
 {
     m_pm4_capture_data = Pm4CaptureData(m_progress_tracker);  // Clear any previously loaded data
     m_capture_metadata = CaptureMetadata();
@@ -52,14 +260,14 @@ CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string& file_nam
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCoreImpl::LoadGfxrCaptureData(const std::string& file_name)
 {
     m_gfxr_capture_data = GfxrCaptureData();
     return m_gfxr_capture_data.LoadCaptureFile(file_name);
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateDiveCommandHierarchy()
+bool DataCoreImpl::CreateDiveCommandHierarchy()
 {
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
 
@@ -82,7 +290,7 @@ bool DataCore::CreateDiveCommandHierarchy()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreatePm4CommandHierarchy()
+bool DataCoreImpl::CreatePm4CommandHierarchy()
 {
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
 
@@ -109,7 +317,7 @@ bool DataCore::CreatePm4CommandHierarchy()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateGfxrCommandHierarchy()
+bool DataCoreImpl::CreateGfxrCommandHierarchy()
 {
     GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
                                                      m_gfxr_capture_data);
@@ -121,7 +329,7 @@ bool DataCore::CreateGfxrCommandHierarchy()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateDiveMetaData()
+bool DataCoreImpl::CreateDiveMetaData()
 {
     auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
     if (!metadata_creator)
@@ -138,7 +346,7 @@ bool DataCore::CreateDiveMetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreatePm4MetaData()
+bool DataCoreImpl::CreatePm4MetaData()
 {
     auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
     if (!metadata_creator)
@@ -154,7 +362,7 @@ bool DataCore::CreatePm4MetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseDiveCaptureData()
+bool DataCoreImpl::ParseDiveCaptureData()
 {
     if (m_progress_tracker)
     {
@@ -175,7 +383,7 @@ bool DataCore::ParseDiveCaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParsePm4CaptureData()
+bool DataCoreImpl::ParsePm4CaptureData()
 {
     if (m_progress_tracker)
     {
@@ -196,7 +404,7 @@ bool DataCore::ParsePm4CaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseGfxrCaptureData()
+bool DataCoreImpl::ParseGfxrCaptureData()
 {
     if (m_progress_tracker)
     {
@@ -212,25 +420,28 @@ bool DataCore::ParseGfxrCaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-const Pm4CaptureData& DataCore::GetPm4CaptureData() const { return m_pm4_capture_data; }
+const Pm4CaptureData& DataCoreImpl::GetPm4CaptureData() const { return m_pm4_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-Pm4CaptureData& DataCore::GetMutablePm4CaptureData() { return m_pm4_capture_data; }
+Pm4CaptureData& DataCoreImpl::GetMutablePm4CaptureData() { return m_pm4_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-const GfxrCaptureData& DataCore::GetGfxrCaptureData() const { return m_gfxr_capture_data; }
+const GfxrCaptureData& DataCoreImpl::GetGfxrCaptureData() const { return m_gfxr_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-GfxrCaptureData& DataCore::GetMutableGfxrCaptureData() { return m_gfxr_capture_data; }
+GfxrCaptureData& DataCoreImpl::GetMutableGfxrCaptureData() { return m_gfxr_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-const CommandHierarchy& DataCore::GetCommandHierarchy() const
+const CommandHierarchy& DataCoreImpl::GetCommandHierarchy() const
 {
     return m_capture_metadata.m_command_hierarchy;
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureMetadata& DataCore::GetCaptureMetadata() const { return m_capture_metadata; }
+CaptureMetadataRef DataCoreImpl::GetCaptureMetadata() const
+{
+    return CaptureMetadataRef(m_capture_metadata);
+}
 
 // =================================================================================================
 // CaptureMetadataCreator

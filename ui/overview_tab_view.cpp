@@ -34,9 +34,7 @@
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
-OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
-                                 const Dive::CaptureStats& stats)
-    : m_stats(stats)
+OverviewTabView::OverviewTabView(const Dive::CaptureStats& stats) : m_stats(stats)
 {
     m_clipboard_button = new QPushButton();
     m_clipboard_button->setIcon(QIcon(":/images/copy.png"));

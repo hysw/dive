@@ -14,10 +14,11 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QFrame>
 
-#include "dive_core/event_state.h"
-#pragma once
+#include "dive/ui/types/impl_pointer.h"
 
 // Forward declaration
 class QTreeWidget;
@@ -34,7 +35,9 @@ class EventStateView : public QFrame
     Q_OBJECT
 
  public:
+    struct Impl;
     EventStateView(const Dive::DataCore& data_core);
+    ~EventStateView();
 
  private slots:
     void OnEventSelected(uint64_t node_index);
@@ -44,45 +47,5 @@ class EventStateView : public QFrame
     virtual void leaveEvent(QEvent* event) override;
 
  private:
-    std::map<std::string, std::string> m_field_desc;
-    const Dive::DataCore& m_data_core;
-    QTreeWidget* m_event_state_tree;
-    QColor m_accent_color;
-
-    Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo& state,
-                                                             uint32_t event_id);
-
-    // For draw/dispatches
-    void BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
-    void DisplayDrawEventStateInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                                   Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayInputAssemblyState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                   Dive::EventStateInfo::ConstIterator);
-    void DisplayTessellationState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayRasterizerState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayFillViewportState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayFillMultisamplingState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                       Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayDepthState(Dive::EventStateInfo::ConstIterator event_state_it,
-                           Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
-                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayColorBlendState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void DisplayHardwareSpecificStates(Dive::EventStateInfo::ConstIterator event_state_it,
-                                       Dive::EventStateInfo::ConstIterator prev_event_state_it);
-
-    // For resolves and/or clears
-    void BuildResolveDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
-    void DisplayResolveState(Dive::EventStateInfo::ConstIterator event_state_it,
-                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void BuildResolveGmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
-    void DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
-    void BuildResolveSysmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
-    void DisplayResolveSysmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    ImplPointer<Impl> m_impl;
 };

@@ -46,7 +46,7 @@ int main(int argc, char** argv)
     }
 
     // Load capture
-    std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
+    std::unique_ptr<Dive::DataCore> data_core = Dive::DataCore::Create();
     Dive::CaptureData::LoadResult load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
@@ -73,7 +73,7 @@ int main(int argc, char** argv)
     }
 
     // Gather Stats...
-    const Dive::CaptureMetadata& meta_data = data_core->GetCaptureMetadata();
+    Dive::CaptureMetadataRef meta_data = data_core->GetCaptureMetadata();
     Dive::CaptureStats capture_stats;
     Dive::TraceStats trace_stats;
 

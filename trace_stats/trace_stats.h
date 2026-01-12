@@ -232,7 +232,7 @@ class TraceStats
     ~TraceStats() = default;
 
     // Gather the trace statistics from the metadata
-    void GatherTraceStats(const Dive::Context& context, const Dive::CaptureMetadata& meta_data,
+    void GatherTraceStats(const Dive::Context& context, Dive::CaptureMetadataRef meta_data,
                           CaptureStats& capture_stats);
 
     // Print the capture statistics to the output stream

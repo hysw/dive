@@ -17,14 +17,18 @@
 #pragma once
 #include <vector>
 
-#include "capture_data.h"
 #include "common.h"
 #include "dive_core/common/emulate_pm4.h"
+#include "common/gpudefs.h"
 #include "shader_disassembly.h"
 #include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
 
+union Pm4Type4Header;
+union Pm4Type7Header;
+
 namespace Dive
 {
+class EmulateStateTracker;
 
 //--------------------------------------------------------------------------------------------------
 // Helper functions
@@ -169,5 +173,7 @@ struct EventInfo
         return false;
     }
 };
+
+bool IsExcludedEndPacketOpcode(uint8_t);
 
 }  // namespace Dive

@@ -114,10 +114,6 @@ if(ANDROID)
 endif()
 
 # ------------------------------------------------------------------------------
-# For generated headers
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
-
-# ------------------------------------------------------------------------------
 # Determine if third-party libraries should be built for the current target
 
 if(NOT ANDROID)

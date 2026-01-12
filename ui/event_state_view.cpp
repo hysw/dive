@@ -26,6 +26,7 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
+#include "dive_core/event_state.h"
 #include "dive_core/shader_disassembly.h"
 #include "hover_help_model.h"
 
@@ -129,37 +130,91 @@
 // =================================================================================================
 // EventStateView
 // =================================================================================================
-EventStateView::EventStateView(const Dive::DataCore& data_core) : m_data_core(data_core)
+
+struct EventStateView::Impl
+{
+    const Dive::DataCore& m_data_core;
+    std::map<std::string, std::string> m_field_desc;
+    QTreeWidget* m_event_state_tree = nullptr;
+    QColor m_accent_color;
+
+    void OnEventSelected(uint64_t node_index);
+
+    Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo& state,
+                                                             uint32_t event_id);
+
+    // For draw/dispatches
+    void BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayDrawEventStateInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                   Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayInputAssemblyState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                   Dive::EventStateInfo::ConstIterator);
+    void DisplayTessellationState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayRasterizerState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayFillViewportState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayFillMultisamplingState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                       Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayDepthState(Dive::EventStateInfo::ConstIterator event_state_it,
+                           Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
+                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayColorBlendState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayHardwareSpecificStates(Dive::EventStateInfo::ConstIterator event_state_it,
+                                       Dive::EventStateInfo::ConstIterator prev_event_state_it);
+
+    // For resolves and/or clears
+    void BuildResolveDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveState(Dive::EventStateInfo::ConstIterator event_state_it,
+                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void BuildResolveGmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void BuildResolveSysmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveSysmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
+};
+
+EventStateView::EventStateView(const Dive::DataCore& data_core)
+    : m_impl(EventStateView::Impl{.m_data_core = data_core})
 {
     QVBoxLayout* layout = new QVBoxLayout();
-    m_event_state_tree = new QTreeWidget();
-    m_event_state_tree->setColumnCount(2);
-    m_event_state_tree->setHeaderLabels(QStringList() << " "
-                                                      << " ");
-    m_event_state_tree->setAlternatingRowColors(true);
-    m_event_state_tree->setMouseTracking(true);
-    m_event_state_tree->setAutoScroll(false);
-    m_event_state_tree->viewport()->setAttribute(Qt::WA_Hover);
+    auto event_state_tree = new QTreeWidget();
+    event_state_tree->setColumnCount(2);
+    event_state_tree->setHeaderLabels(QStringList() << " "
+                                                    << " ");
+    event_state_tree->setAlternatingRowColors(true);
+    event_state_tree->setMouseTracking(true);
+    event_state_tree->setAutoScroll(false);
+    event_state_tree->viewport()->setAttribute(Qt::WA_Hover);
 
-    layout->addWidget(m_event_state_tree);
-    layout->setStretchFactor(m_event_state_tree, 1);
+    layout->addWidget(event_state_tree);
+    layout->setStretchFactor(event_state_tree, 1);
     setLayout(layout);
 
-    QObject::connect(m_event_state_tree, SIGNAL(itemEntered(QTreeWidgetItem*, int)), this,
+    QObject::connect(event_state_tree, SIGNAL(itemEntered(QTreeWidgetItem*, int)), this,
                      SLOT(OnHover(QTreeWidgetItem*, int)));
+    m_impl->m_event_state_tree = event_state_tree;
 }
 
+EventStateView::~EventStateView() {}
+
 //--------------------------------------------------------------------------------------------------
-void EventStateView::OnEventSelected(uint64_t node_index)
+void EventStateView::OnEventSelected(uint64_t node_index) { m_impl->OnEventSelected(node_index); }
+
+void EventStateView::Impl::OnEventSelected(uint64_t node_index)
 {
     m_event_state_tree->clear();
     if (node_index == UINT64_MAX) return;
 
     m_accent_color = GetTextAccentColor();
 
-    auto& metadata = m_data_core.GetCaptureMetadata();
-    auto& command_hierarchy = m_data_core.GetCommandHierarchy();
-    auto& event_state = metadata.m_event_state;
+    auto metadata = m_data_core.GetCaptureMetadata();
+    const auto& command_hierarchy = m_data_core.GetCommandHierarchy();
+    const auto& event_state = metadata.GetEventState();
 
     auto previous_event_state = [&](auto it, auto IsType) {
         auto prev_it = std::prev(it);
@@ -167,8 +222,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         {
             auto id = static_cast<Dive::EventStateId>(prev_it->id());
             // Check if it's draw or dispatch events
-            const Dive::EventInfo& prev_event_info =
-                metadata.m_event_info[static_cast<uint32_t>(id)];
+            const Dive::EventInfo& prev_event_info = metadata.GetEvent(static_cast<size_t>(id));
             if (IsType(prev_event_info.m_type))
                 break;
             else
@@ -182,8 +236,8 @@ void EventStateView::OnEventSelected(uint64_t node_index)
     {
         auto event_id = m_data_core.GetCommandHierarchy().GetEventNodeId(node_index);
         // Check if it's draw or dispatch events
-        if (!(event_id < metadata.m_event_info.size())) return;
-        const Dive::EventInfo& event_info = metadata.m_event_info[event_id];
+        if (!(event_id < metadata.GetEventCount())) return;
+        const Dive::EventInfo& event_info = metadata.GetEvent(event_id);
         if (event_info.m_type == Dive::Util::EventType::kDraw)
         {
             auto event_state_it = GetStateInfoForEvent(event_state, event_id);
@@ -220,14 +274,14 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         m_event_state_tree->resizeColumnToContents(column);
 }
 
-Dive::EventStateInfo::ConstIterator EventStateView::GetStateInfoForEvent(
+Dive::EventStateInfo::ConstIterator EventStateView::Impl::GetStateInfoForEvent(
     const Dive::EventStateInfo& state, uint32_t event_id)
 {
     return state.find(static_cast<Dive::EventStateId>(event_id));
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayDrawEventStateInfo(
+void EventStateView::Impl::DisplayDrawEventStateInfo(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -249,7 +303,8 @@ void EventStateView::DisplayDrawEventStateInfo(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it)
+void EventStateView::Impl::BuildDrawDescriptionMap(
+    Dive::EventStateInfo::ConstIterator event_state_it)
 {
     if (m_field_desc.size()) return;
 
@@ -330,8 +385,9 @@ void EventStateView::BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayResolveState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                         Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayResolveState(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     BuildResolveDescriptionMap(event_state_it);
 
@@ -369,7 +425,8 @@ void EventStateView::DisplayResolveState(Dive::EventStateInfo::ConstIterator eve
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::BuildResolveDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it)
+void EventStateView::Impl::BuildResolveDescriptionMap(
+    Dive::EventStateInfo::ConstIterator event_state_it)
 {
     if (m_field_desc.size()) return;
 
@@ -378,8 +435,9 @@ void EventStateView::BuildResolveDescriptionMap(Dive::EventStateInfo::ConstItera
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                                            Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayResolveGmemInfo(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     BuildResolveGmemDescriptionMap(event_state_it);
 
@@ -400,7 +458,7 @@ void EventStateView::DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator 
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::BuildResolveGmemDescriptionMap(
+void EventStateView::Impl::BuildResolveGmemDescriptionMap(
     Dive::EventStateInfo::ConstIterator event_state_it)
 {
     ADD_FIELD_DESC(event_state_it->GetResolveBaseGmemName(),
@@ -408,7 +466,7 @@ void EventStateView::BuildResolveGmemDescriptionMap(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayResolveSysmemInfo(
+void EventStateView::Impl::DisplayResolveSysmemInfo(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -431,7 +489,7 @@ void EventStateView::DisplayResolveSysmemInfo(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::BuildResolveSysmemDescriptionMap(
+void EventStateView::Impl::BuildResolveSysmemDescriptionMap(
     Dive::EventStateInfo::ConstIterator event_state_it)
 {
     ADD_FIELD_DESC(event_state_it->GetResolveBaseSysmemName(),
@@ -439,7 +497,7 @@ void EventStateView::BuildResolveSysmemDescriptionMap(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayInputAssemblyState(
+void EventStateView::Impl::DisplayInputAssemblyState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -467,7 +525,7 @@ void EventStateView::DisplayInputAssemblyState(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayTessellationState(
+void EventStateView::Impl::DisplayTessellationState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -486,8 +544,9 @@ void EventStateView::DisplayTessellationState(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayRasterizerState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                            Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayRasterizerState(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     QList<QTreeWidgetItem*> items;
 
@@ -584,7 +643,7 @@ void EventStateView::DisplayRasterizerState(Dive::EventStateInfo::ConstIterator 
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayFillMultisamplingState(
+void EventStateView::Impl::DisplayFillMultisamplingState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -639,7 +698,7 @@ void EventStateView::DisplayFillMultisamplingState(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayFillViewportState(
+void EventStateView::Impl::DisplayFillViewportState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -730,8 +789,9 @@ void EventStateView::DisplayFillViewportState(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                       Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayDepthState(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     QList<QTreeWidgetItem*> items;
 
@@ -794,8 +854,9 @@ void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                         Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayStencilState(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     QList<QTreeWidgetItem*> items;
 
@@ -834,8 +895,9 @@ void EventStateView::DisplayStencilState(Dive::EventStateInfo::ConstIterator eve
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator event_state_it,
-                                            Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::Impl::DisplayColorBlendState(
+    Dive::EventStateInfo::ConstIterator event_state_it,
+    Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     QList<QTreeWidgetItem*> items;
 
@@ -942,7 +1004,7 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayHardwareSpecificStates(
+void EventStateView::Impl::DisplayHardwareSpecificStates(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
@@ -1212,10 +1274,10 @@ void EventStateView::OnHover(QTreeWidgetItem* item_ptr, int column)
 {
     HoverHelp* hover_help_ptr = HoverHelp::Get();
     QString field_name = item_ptr->text(0);
-    if (m_field_desc.find(field_name.toStdString()) != m_field_desc.end())
+    if (m_impl->m_field_desc.find(field_name.toStdString()) != m_impl->m_field_desc.end())
     {
         hover_help_ptr->SetCurItem(HoverHelp::Item::kNone, UINT32_MAX, UINT32_MAX, UINT32_MAX,
-                                   m_field_desc[field_name.toStdString()].c_str());
+                                   m_impl->m_field_desc[field_name.toStdString()].c_str());
     }
     else
         hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);

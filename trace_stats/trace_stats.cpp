@@ -22,6 +22,7 @@
 #include <mutex>
 #include <thread>
 
+#include "dive_core/data_core.h"
 #include "dive_core/event_state.h"
 
 namespace Dive
@@ -187,16 +188,15 @@ class ThreadPool
     } while (0)
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::GatherTraceStats(const Dive::Context& context,
-                                  const Dive::CaptureMetadata& meta_data,
+void TraceStats::GatherTraceStats(const Dive::Context& context, Dive::CaptureMetadataRef meta_data,
                                   CaptureStats& capture_stats)
 {
     capture_stats = CaptureStats();  // Reset any previous stats
 
     std::array<uint64_t, Dive::Stats::kNumStats>& stats_list = capture_stats.m_stats_list;
 
-    size_t event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo& event_state = meta_data.m_event_state;
+    size_t event_count = meta_data.GetEventCount();
+    const Dive::EventStateInfo& event_state = meta_data.GetEventState();
 
     Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
     for (size_t i = 0; i < event_count; ++i)
@@ -206,7 +206,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
             capture_stats = CaptureStats();
             return;
         }
-        const Dive::EventInfo& info = meta_data.m_event_info[i];
+        const Dive::EventInfo& info = meta_data.GetEvent(i);
 
         if (info.m_render_mode != cur_type)
         {
@@ -329,21 +329,22 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
     std::vector<size_t> shaders_num_instructions;
     std::vector<uint32_t> shaders_num_gprs;
 
-    stats_list[Dive::Stats::kShaders] = meta_data.m_shaders.size();
+    stats_list[Dive::Stats::kShaders] = meta_data.GetShaderCount();
 
     ThreadPool thread_pool;
-    if (meta_data.m_shaders.size() > 0)
+    if (meta_data.GetShaderCount() > 0)
     {
-        auto task_count = static_cast<unsigned int>(meta_data.m_shaders.size());
+        size_t shader_count = meta_data.GetShaderCount();
+        auto task_count = static_cast<unsigned int>(shader_count);
         thread_pool.Start(thread_pool.SuggestedNumberOfWorkers(task_count));
-        for (const Dive::Disassembly& disassembly : meta_data.m_shaders)
+        for (size_t i = 0; i < shader_count; ++i)
         {
-            thread_pool.Run([&context, &disassembly]() {
+            thread_pool.Run([&context, &meta_data, i]() {
                 if (context.Cancelled())
                 {
                     return;
                 }
-                disassembly.EagerEval();
+                meta_data.GetShader(i).EagerEval();
             });
         }
     }
@@ -365,7 +366,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
         else
             stats_list[Dive::Stats::kNonVS]++;
 
-        const Dive::Disassembly& disass = meta_data.m_shaders[ref.m_shader_index];
+        const Dive::Disassembly& disass = meta_data.GetShader(ref.m_shader_index);
         shaders_num_instructions.push_back(disass.GetNumInstructions());
         shaders_num_gprs.push_back(disass.GetGPRCount());
     }

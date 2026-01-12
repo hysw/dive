@@ -368,9 +368,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t par
         if (m_command_hierarchy.GetNodeType(parent_node_index) == Dive::NodeType::kPacketNode)
         {
             uint8_t opcode = m_command_hierarchy.GetPacketNodeOpcode(parent_node_index);
-            if (opcode == CP_START_BIN || opcode == CP_INDIRECT_BUFFER_PFE ||
-                opcode == CP_INDIRECT_BUFFER_PFD || opcode == CP_INDIRECT_BUFFER_CHAIN)
-                is_selected = false;
+            if (Dive::IsExcludedEndPacketOpcode(opcode)) is_selected = false;
         }
     }
 

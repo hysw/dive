@@ -25,7 +25,7 @@ namespace Dive::HostCli
 DataCoreWrapper::DataCoreWrapper()
 {
     // Initialize DataCore
-    m_data_core = std::make_unique<Dive::DataCore>();
+    m_data_core = Dive::DataCore::Create();
 }
 
 bool DataCoreWrapper::IsGfxrLoaded() const

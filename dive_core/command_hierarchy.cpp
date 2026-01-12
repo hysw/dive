@@ -27,6 +27,7 @@
 #include <sstream>
 #include <string>
 
+#include "adreno.h"
 #include "dive_core/common/common.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 #include "dive_strings.h"
