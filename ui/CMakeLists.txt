@@ -57,7 +57,7 @@ add_executable(
     # MacOS icon
     $<$<PLATFORM_ID:Darwin>:dive.icns>
     # Entry point:
-    main.cpp
+    main_exe.cpp
     # Dive Gui Source:
     about_window.cpp
     about_window.h
@@ -120,6 +120,8 @@ add_executable(
     hover_help_model.h
     main_window.cpp
     main_window.h
+    main.h
+    main.cpp
     misc_stats_model.cpp
     misc_stats_model.h
     misc_stats_tab_view.cpp
