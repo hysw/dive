@@ -28,7 +28,7 @@ def parse_args():
         description='This script automates the bundling for Dive application on MacOS',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "--sign", 
+        "--sign",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Sign the app bundle")
@@ -76,7 +76,7 @@ def main(args):
     print("\nCopying resources into app bundle...")
 
     shutil.copytree("host", "dive.app/Contents/MacOS", dirs_exist_ok=True)
-    shutil.copytree("plugins", "dive.app/Contents/Resources/plugins", dirs_exist_ok=True)
+    shutil.copytree("plugins", "dive.app/Contents/PlugIns/dive_plugins", dirs_exist_ok=True)
 
     if args.device_libraries:
         shutil.copytree("device", "dive.app/Contents/Resources", dirs_exist_ok=True)
