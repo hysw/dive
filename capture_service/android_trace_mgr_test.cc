@@ -42,7 +42,7 @@ TEST(AndroidTraceManagerTest, OnFrameBoundaryDetectedTraceByFrameForOneFrame)
     android_trace_manager.OnNewFrame();
 
     // This request to trace will be deferred until the next frame boundary.
-    android_trace_manager.TriggerTrace();
+    android_trace_manager.TriggerTrace("");
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Triggered);
     // Can detect that a frame-based trace was chosen based on the trace file path. Duration-based
     // is trace-XXXX.rd instead.
@@ -64,7 +64,7 @@ TEST(AndroidTraceManagerTest, TraceByDurationTransistionsToFinishAndUsesByDurati
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Idle);
 
     // Trace by duration since OnNewFrame is not called.
-    android_trace_manager.TriggerTrace();
+    android_trace_manager.TriggerTrace("");
     // Unlike trace by frame, all states transitions occur during TriggerTrace.
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
     // Can detect trace by duration based on the trace file path.

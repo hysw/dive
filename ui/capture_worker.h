@@ -31,6 +31,7 @@ class CaptureWorker : public QThread
     void run() override;
     // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
     // the directory already exists
+    void SetDeviceStagingDir(const std::string& dir);
     void SetTargetCaptureDir(const std::string& host_root_dir);
     void SetPackageName(std::string_view package_name);
  signals:
@@ -41,5 +42,6 @@ class CaptureWorker : public QThread
 
  protected:
     std::filesystem::path m_host_capture_dir;
+    std::string m_device_staging_path;
     std::string m_package_name;
 };

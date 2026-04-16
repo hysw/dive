@@ -89,6 +89,12 @@ QRadioButton* CreateRadioButtonForEnum(GfxrCaptureSettings::EndPoint end_point, 
     return button;
 }
 
+std::string GetDefaultDeviceStagingDirectoryName()
+{
+    return absl::StrCat(std::string(Dive::DeviceResourcesConstants::kDeviceDownloadPath), "/",
+                        Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+}
+
 }  // namespace
 
 // =================================================================================================
@@ -102,8 +108,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_device_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
-    m_gfxr_capture_file_on_device_directory_label =
-        new QLabel(tr("On Device GFXR Capture File Directory Name:"));
+    m_capture_file_on_device_directory_label = new QLabel(tr("On Device Capture Directory:"));
     QLabel* capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
     m_pkg_model = new QStandardItemModel();
@@ -220,13 +225,13 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_type_layout->addWidget(m_app_type_box, 1);
 
     m_gfxr_capture_file_directory_layout = new QHBoxLayout();
-    m_gfxr_capture_file_directory_input_box = new QLineEdit();
-    m_gfxr_capture_file_directory_input_box->setPlaceholderText(
-        "Input a name for the capture directory");
-    m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_on_device_directory_label);
-    m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_directory_input_box);
-    m_gfxr_capture_file_on_device_directory_label->hide();
-    m_gfxr_capture_file_directory_input_box->hide();
+    m_capture_file_directory_input_box = new QLineEdit();
+    m_capture_file_directory_input_box->setPlaceholderText(
+        QString::fromStdString(GetDefaultDeviceStagingDirectoryName()));
+    m_gfxr_capture_file_directory_layout->addWidget(m_capture_file_on_device_directory_label);
+    m_gfxr_capture_file_directory_layout->addWidget(m_capture_file_directory_input_box);
+    // m_capture_file_on_device_directory_label->hide();
+    // m_capture_file_directory_input_box->hide();
 
     QHBoxLayout* capture_file_local_directory_layout = new QHBoxLayout();
     m_capture_file_local_root_directory_input_box = new QLineEdit();
@@ -349,7 +354,7 @@ absl::Status TraceDialog::StopPackageAndCleanup()
         }
         // Only delete the on device capture directory when the application is closed.
         auto ret = device->Adb().Run(
-            absl::StrFormat("shell rm -rf %s", m_on_device_capture_file_directory));
+            absl::StrFormat("shell rm -rf %s", GfxrDeviceStagingDir()));
         if (!ret.ok())
         {
             qDebug() << "Failed to remove on-device capture directory: " << ret.ToString().c_str();
@@ -604,8 +609,7 @@ void TraceDialog::OnStartPackage()
     }
     device->SetGfxrCaptureSettings(
         m_gfxr_capture ? std::make_optional(Dive::GfxrCaptureSettings{
-                             .capture_file_directory =
-                                 m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                             .capture_file_directory = GfxrDeviceStagingDir(),
                              .end_point = static_cast<Dive::GfxrCaptureSettings::EndPoint>(
                                  m_gfxr_capture_end_point_button_group->checkedId()),
                          })
@@ -665,7 +669,7 @@ void TraceDialog::OnRunButtonClicked()
     {
         SetTraceDialogForCapture();
         m_run_button->setText(kStop_Application);
-        emit StartPackageClicked(m_gfxr_capture_file_directory_input_box->text(), m_gfxr_capture);
+        emit StartPackageClicked();
     }
     else
     {
@@ -698,6 +702,7 @@ void TraceDialog::OnTraceClicked()
     progress_bar->setMinimumDuration(0);
     CaptureWorker* workerThread = new CaptureWorker(this);
 
+    workerThread->SetDeviceStagingDir(m_on_device_capture_file_directory);
     workerThread->SetTargetCaptureDir(
         m_capture_file_local_root_directory_input_box->text().toStdString());
     workerThread->SetPackageName(m_cur_pkg.toStdString());
@@ -807,8 +812,9 @@ void TraceDialog::ShowGfxrFields()
     m_app_type_filter_model->setFilterActive(true);
     m_capture_button->hide();
     m_gfxr_capture_button->show();
-    m_gfxr_capture_file_on_device_directory_label->show();
-    m_gfxr_capture_file_directory_input_box->show();
+    // m_capture_file_on_device_directory_label->show();
+    // m_capture_file_directory_input_box->show();
+    m_capture_file_directory_input_box->setPlaceholderText(QString::fromStdString(GetDefaultDeviceStagingDirectoryName()));
     m_gfxr_capture_end_point_container->show();
 }
 
@@ -817,8 +823,9 @@ void TraceDialog::HideGfxrFields()
     m_app_type_filter_model->setFilterActive(false);
     m_capture_button->show();
     m_gfxr_capture_button->hide();
-    m_gfxr_capture_file_on_device_directory_label->hide();
-    m_gfxr_capture_file_directory_input_box->hide();
+    // m_capture_file_on_device_directory_label->hide();
+    // m_capture_file_directory_input_box->hide();
+    m_capture_file_directory_input_box->setPlaceholderText(tr("Default staging location"));
     m_gfxr_capture_end_point_container->hide();
 }
 
@@ -830,10 +837,17 @@ void TraceDialog::EnableDialogInputs(bool enable)
     m_pkg_box->setEnabled(enable);
     m_pkg_refresh_button->setEnabled(enable);
     m_pkg_filter_button->setEnabled(enable);
-    m_gfxr_capture_file_directory_input_box->setEnabled(enable);
+    m_capture_file_directory_input_box->setEnabled(enable);
     m_capture_file_local_root_directory_input_box->setEnabled(enable);
     m_args_input_box->setEnabled(enable);
     m_app_type_box->setEnabled(enable);
+}
+
+std::string TraceDialog::GfxrDeviceStagingDir() const {
+    if(m_on_device_capture_file_directory.empty()) {
+        return GetDefaultDeviceStagingDirectoryName();
+    }
+    return m_on_device_capture_file_directory;
 }
 
 void TraceDialog::OnGfxrCaptureClicked()
@@ -883,7 +897,7 @@ void TraceDialog::OnGfxrCaptureClicked()
             return;
         }
 
-        std::filesystem::path capture_path(m_on_device_capture_file_directory);
+        std::filesystem::path capture_path(GfxrDeviceStagingDir());
         ret = device->TriggerScreenCapture(capture_path);
         if (!ret.ok())
         {
@@ -915,7 +929,7 @@ void TraceDialog::RetrieveGfxrCapture()
     progress_bar->setAutoClose(true);
 
     GfxrCaptureWorker* workerThread = new GfxrCaptureWorker(this);
-    workerThread->SetGfxrSourceCaptureDir(m_on_device_capture_file_directory);
+    workerThread->SetGfxrSourceCaptureDir(GfxrDeviceStagingDir());
 
     workerThread->SetTargetCaptureDir(
         m_capture_file_local_root_directory_input_box->text().toStdString());
@@ -939,14 +953,8 @@ void TraceDialog::RetrieveGfxrCapture()
     m_gfxr_capture_button->setEnabled(false);
 }
 
-void TraceDialog::UpdateCaptureFileDirectories(std::string on_device_capture_file_directory)
+void TraceDialog::UpdateCaptureFileDirectories()
 {
-    if (m_gfxr_capture_file_directory_input_box->text() == "")
-    {
-        m_gfxr_capture_file_directory_input_box->setText(
-            QString::fromUtf8(Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName));
-    }
-
     if (m_capture_file_local_root_directory_input_box->text() == "")
     {
         std::filesystem::path host_root_path = Dive::ResolveHostRootPath();
@@ -954,15 +962,7 @@ void TraceDialog::UpdateCaptureFileDirectories(std::string on_device_capture_fil
             QString::fromStdString(host_root_path.string()));
     }
 
-    if (on_device_capture_file_directory != "")
-    {
-        m_on_device_capture_file_directory = on_device_capture_file_directory;
-        return;
-    }
-
-    m_on_device_capture_file_directory =
-        absl::StrCat(std::string(Dive::DeviceResourcesConstants::kDeviceDownloadPath), "/",
-                     m_gfxr_capture_file_directory_input_box->text().toStdString());
+    m_on_device_capture_file_directory = m_capture_file_directory_input_box->text().toStdString();
 }
 
 void TraceDialog::SetTraceDialogForCapture()
@@ -1011,7 +1011,7 @@ void TraceDialog::ResetDialog()
 {
     m_gfxr_capture_button->setEnabled(false);
     m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
-    m_gfxr_capture_file_directory_input_box->clear();
+    m_capture_file_directory_input_box->clear();
     m_cur_pkg.clear();
     m_cmd_input_box->clear();
     m_args_input_box->clear();

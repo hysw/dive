@@ -43,10 +43,18 @@ AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration)
 {
 }
 
-void AndroidTraceManager::TraceByFrame()
+void AndroidTraceManager::TraceByFrame(const std::string& trace_path)
 {
-    std::string num = absl::StrCat(m_frame_num);
     std::string path = absl::StrCat(kTraceFilePath, "trace-frame");
+    if (!trace_path.empty())
+    {
+        path = trace_path;
+        if (path.back() != '/')
+        {
+            path.push_back('/');
+        }
+    }
+    std::string num = absl::StrCat(m_frame_num);
     std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_frame_num);
 
     SetTraceFilePath(full_path);
@@ -59,11 +67,19 @@ void AndroidTraceManager::TraceByFrame()
     }
 }
 
-void AndroidTraceManager::TraceByDuration()
+void AndroidTraceManager::TraceByDuration(const std::string& trace_path)
 {
     m_trace_num++;
     std::string num = absl::StrCat(m_trace_num);
     std::string path = absl::StrCat(kTraceFilePath, "trace");
+    if (!trace_path.empty())
+    {
+        path = trace_path;
+        if (path.back() != '/')
+        {
+            path.push_back('/');
+        }
+    }
     std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_trace_num);
     // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
     SetCaptureName(path.c_str(), num.c_str());
@@ -88,7 +104,7 @@ void AndroidTraceManager::TraceByDuration()
     }
 }
 
-void AndroidTraceManager::TriggerTrace()
+void AndroidTraceManager::TriggerTrace(const std::string& trace_path)
 {
     // There are two kinds of traces: by duration, and by frame. If OnNewFrame is called then trace
     // by frame for GetNumFrameToTrace() frames; this function immediately returns and the trace
@@ -96,11 +112,11 @@ void AndroidTraceManager::TriggerTrace()
     // `m_trace_duration` time; this function will block until the trace is done.
     if (m_frame_num > 0)
     {
-        TraceByFrame();
+        TraceByFrame(trace_path);
     }
     else
     {
-        TraceByDuration();
+        TraceByDuration(trace_path);
     }
 }
 

@@ -55,7 +55,7 @@ class TcpClient
     // Requests the server to start a PM4 capture.
     // On success, returns a string identifier (capture file path on the server).
     // On failure, returns a status.
-    absl::StatusOr<std::string> StartPm4Capture();
+    absl::StatusOr<std::string> StartPm4Capture(const std::string& trace_dir);
 
     // Downloads a file from the server to a local path.
     absl::Status DownloadFileFromServer(const std::string& remote_file_path,

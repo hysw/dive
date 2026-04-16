@@ -120,7 +120,7 @@ class HandshakeResponse : public HandshakeMessage
     MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }
 };
 
-class Pm4CaptureRequest : public EmptyMessage
+class Pm4CaptureRequest : public StringMessage
 {
  public:
     MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_REQUEST; }

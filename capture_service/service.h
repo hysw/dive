@@ -23,8 +23,6 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
-
 class ServerMessageHandler : public Network::BaseMessageHandler
 {
  public:

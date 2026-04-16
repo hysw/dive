@@ -39,7 +39,7 @@ class TraceManager
 {
  public:
     TraceManager();
-    virtual void TriggerTrace() {}
+    virtual void TriggerTrace(const std::string& trace_path) {}
     virtual void OnNewFrame() {}
     virtual void WaitForTraceDone() {}
 
@@ -66,7 +66,7 @@ class AndroidTraceManager : public TraceManager
     // `trace_duration` is ignored during trace by frame.
     explicit AndroidTraceManager(absl::Duration trace_duration = absl::Seconds(3));
 
-    void TriggerTrace() override ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void TriggerTrace(const std::string& trace_path) override ABSL_LOCKS_EXCLUDED(m_state_lock);
     void OnNewFrame() override ABSL_LOCKS_EXCLUDED(m_state_lock);
     void WaitForTraceDone() override ABSL_LOCKS_EXCLUDED(m_state_lock);
 
@@ -77,8 +77,8 @@ class AndroidTraceManager : public TraceManager
     }
 
  private:
-    void TraceByFrame() ABSL_LOCKS_EXCLUDED(m_state_lock);
-    void TraceByDuration() ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void TraceByFrame(const std::string& trace_path) ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void TraceByDuration(const std::string& trace_path) ABSL_LOCKS_EXCLUDED(m_state_lock);
     bool ShouldStartTrace() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
     bool ShouldStopTrace() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
     void OnTraceStart() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);

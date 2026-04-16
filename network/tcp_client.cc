@@ -106,7 +106,7 @@ bool TcpClient::IsConnected() const
     return GetClientStatus() == ClientStatus::CONNECTED && m_connection && m_connection->IsOpen();
 }
 
-absl::StatusOr<std::string> TcpClient::StartPm4Capture()
+absl::StatusOr<std::string> TcpClient::StartPm4Capture(const std::string& trace_dir)
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);
     if (!IsConnected())
@@ -115,6 +115,7 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     }
 
     Pm4CaptureRequest pm4_request;
+    pm4_request.SetString(trace_dir);
     std::cout << "Client: StartPm4Capture request." << std::endl;
     auto send_status = SendSocketMessage(m_connection.get(), pm4_request);
     if (!send_status.ok())

@@ -23,6 +23,9 @@
 #include "dive/utils/device_resources.h"
 #include "network/tcp_client.h"
 
+void CaptureWorker::SetDeviceStagingDir(const std::string& dir) {
+    m_device_staging_path = dir;
+}
 //--------------------------------------------------------------------------------------------------
 void CaptureWorker::SetTargetCaptureDir(const std::string& host_root_dir)
 {
@@ -72,7 +75,7 @@ void CaptureWorker::run()
         return;
     }
 
-    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
+    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture(m_host_capture_dir);
     if (capture_file_path.ok())
     {
         emit UpdateProgressDialog("Triggering PM4 Capture ...");

@@ -390,7 +390,7 @@ absl::Status TriggerPm4Capture(const CommandContext& ctx)
         return Dive::StatusWithContext(status, "Connection failed");
     }
 
-    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
+    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture("");
     if (!capture_file_path.ok())
     {
         return Dive::StatusWithContext(capture_file_path.status(), "StartPm4Capture failed");

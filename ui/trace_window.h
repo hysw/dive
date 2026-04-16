@@ -75,7 +75,7 @@ class TraceDialog : public DeviceDialog
     void RetrieveGfxrCapture();
     Dive::AndroidDevice* GetAndValidateDevice();
     void SetResetDialogOnClose(bool reset) { m_dialog_reset_on_close = reset; }
-    void UpdateCaptureFileDirectories(std::string on_device_capture_file_directory = "");
+    void UpdateCaptureFileDirectories();
     void SetTraceDialogForCapture();
     void ResetTraceDialogOnAppStop();
 
@@ -110,7 +110,7 @@ class TraceDialog : public DeviceDialog
     void TraceAvailable(const QString&);
     void PackageSelected(const QString& curr_package_name, const QString& prev_package_name);
     void PackageListAvailable(bool gfrx_capture_enabled, QStringList package_list);
-    void StartPackageClicked(const QString& capture_dir = "", bool gfrx_capture_enabled = false);
+    void StartPackageClicked();
     void StopPackageClicked(bool gfrx_capture_enabled = false);
     void CloseDialog(bool gfrx_capture_enabled);
 
@@ -121,6 +121,8 @@ class TraceDialog : public DeviceDialog
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
+
+    std::string GfxrDeviceStagingDir() const;
 
     ApplicationController& m_controller;
 
@@ -173,8 +175,8 @@ class TraceDialog : public DeviceDialog
     QLineEdit* m_args_input_box;
 
     QHBoxLayout* m_gfxr_capture_file_directory_layout;
-    QLabel* m_gfxr_capture_file_on_device_directory_label;
-    QLineEdit* m_gfxr_capture_file_directory_input_box;
+    QLabel* m_capture_file_on_device_directory_label;
+    QLineEdit* m_capture_file_directory_input_box;
 
     QLineEdit* m_capture_file_local_root_directory_input_box;
 

@@ -32,9 +32,9 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
+absl::Status StartPm4Capture(Network::SocketConnection* client_conn, Network::Pm4CaptureRequest& req)
 {
-    GetTraceMgr().TriggerTrace();
+    GetTraceMgr().TriggerTrace(req.GetString());
     GetTraceMgr().WaitForTraceDone();
     std::string capture_file_path = GetTraceMgr().GetTraceFilePath();
 
@@ -62,7 +62,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
             LOG(INFO) << "Message received: Pm4CaptureRequest";
-            if (absl::Status status = StartPm4Capture(client_conn); !status.ok())
+            if (absl::Status status = StartPm4Capture(client_conn, *static_cast<Network::Pm4CaptureRequest*>(message.get())); !status.ok())
             {
                 LOG(ERROR) << "StartPm4Capture failed: " << status.message();
             }
