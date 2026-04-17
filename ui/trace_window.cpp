@@ -89,6 +89,12 @@ QRadioButton* CreateRadioButtonForEnum(GfxrCaptureSettings::EndPoint end_point, 
     return button;
 }
 
+std::string GetDefaultDeviceStagingDirectoryName()
+{
+    return absl::StrCat(std::string(Dive::DeviceResourcesConstants::kDeviceDownloadPath), "/",
+                        Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+}
+
 }  // namespace
 
 // =================================================================================================
@@ -604,8 +610,7 @@ void TraceDialog::OnStartPackage()
     }
     device->SetGfxrCaptureSettings(
         m_gfxr_capture ? std::make_optional(Dive::GfxrCaptureSettings{
-                             .capture_file_directory =
-                                 m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                             .capture_file_directory = m_on_device_capture_file_directory,
                              .end_point = static_cast<Dive::GfxrCaptureSettings::EndPoint>(
                                  m_gfxr_capture_end_point_button_group->checkedId()),
                          })
@@ -665,7 +670,7 @@ void TraceDialog::OnRunButtonClicked()
     {
         SetTraceDialogForCapture();
         m_run_button->setText(kStop_Application);
-        emit StartPackageClicked(m_gfxr_capture_file_directory_input_box->text(), m_gfxr_capture);
+        emit StartPackageClicked();
     }
     else
     {
@@ -961,8 +966,11 @@ void TraceDialog::UpdateCaptureFileDirectories(std::string on_device_capture_fil
     }
 
     m_on_device_capture_file_directory =
-        absl::StrCat(std::string(Dive::DeviceResourcesConstants::kDeviceDownloadPath), "/",
-                     m_gfxr_capture_file_directory_input_box->text().toStdString());
+        m_gfxr_capture_file_directory_input_box->text().toStdString();
+    if (m_on_device_capture_file_directory.empty())
+    {
+        m_on_device_capture_file_directory = GetDefaultDeviceStagingDirectoryName();
+    }
 }
 
 void TraceDialog::SetTraceDialogForCapture()

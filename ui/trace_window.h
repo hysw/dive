@@ -110,7 +110,7 @@ class TraceDialog : public DeviceDialog
     void TraceAvailable(const QString&);
     void PackageSelected(const QString& curr_package_name, const QString& prev_package_name);
     void PackageListAvailable(bool gfrx_capture_enabled, QStringList package_list);
-    void StartPackageClicked(const QString& capture_dir = "", bool gfrx_capture_enabled = false);
+    void StartPackageClicked();
     void StopPackageClicked(bool gfrx_capture_enabled = false);
     void CloseDialog(bool gfrx_capture_enabled);
 
